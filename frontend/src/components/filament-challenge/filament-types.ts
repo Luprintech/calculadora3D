@@ -36,6 +36,8 @@ export interface FilamentPiece {
   totalCost: number;
   timeLines: number;
   gramLines: number;
+  /** Data URL (base64) de la imagen de la pieza, o null si no tiene */
+  imageUrl: string | null;
 }
 
 // ── Stats ────────────────────────────────────────────────────────────────────────

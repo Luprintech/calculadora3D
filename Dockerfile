@@ -7,7 +7,18 @@ FROM node:20-alpine AS deps
 
 # Instalar herramientas necesarias para compilar módulos nativos
 # better-sqlite3 necesita python3, make y g++
-RUN apk add --no-cache python3 make g++
+# Puppeteer necesita chromium y dependencias gráficas
+RUN apk add --no-cache \
+    python3 \
+    make \
+    g++ \
+    chromium \
+    nss \
+    freetype \
+    harfbuzz \
+    ca-certificates \
+    ttf-freefont \
+    font-noto-emoji
 
 # Carpeta de trabajo dentro del contenedor
 WORKDIR /app
@@ -53,6 +64,20 @@ RUN cd frontend && npm run build
 
 FROM node:20-alpine
 
+# Instalar Chromium para Puppeteer en producción
+RUN apk add --no-cache \
+    chromium \
+    nss \
+    freetype \
+    harfbuzz \
+    ca-certificates \
+    ttf-freefont \
+    font-noto-emoji
+
+# Variables de entorno para Puppeteer
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
+    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+
 WORKDIR /app
 
 # Copiar SOLO lo necesario para producción
@@ -65,6 +90,8 @@ COPY --from=build /app/backend/node_modules ./backend/node_modules
 # frontend compilado (archivos estáticos)
 COPY --from=build /app/frontend/dist ./frontend/dist
 
+# Crear carpeta para logos uploaded
+RUN mkdir -p /app/backend/uploads/logos
 
 # Exponer puerto del servidor Express
 EXPOSE 3001

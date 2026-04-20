@@ -22,6 +22,7 @@ export interface PieceInput {
   name: string;
   timeText: string;
   gramText: string;
+  imageUrl?: string | null;
 }
 
 export interface FilamentStorageOptions {
@@ -178,6 +179,7 @@ export function useFilamentStorage({ authLoading, userId }: FilamentStorageOptio
       totalCost,
       timeLines:  time.validLines,
       gramLines:  grams.validLines,
+      imageUrl:   input.imageUrl ?? null,
     };
     setPieces((prev) => [...prev, piece]);
     setProjects((prev) => prev.map((project) =>
@@ -203,7 +205,7 @@ export function useFilamentStorage({ authLoading, userId }: FilamentStorageOptio
     setPieces((prev) =>
       prev.map((p) =>
         p.id === id
-          ? { ...p, ...input, totalSecs: time.totalSecs, totalGrams: grams.totalGrams, totalCost, timeLines: time.validLines, gramLines: grams.validLines }
+          ? { ...p, ...input, totalSecs: time.totalSecs, totalGrams: grams.totalGrams, totalCost, timeLines: time.validLines, gramLines: grams.validLines, imageUrl: input.imageUrl ?? null }
           : p,
       ),
     );

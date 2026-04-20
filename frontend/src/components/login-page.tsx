@@ -5,9 +5,11 @@ import { GoogleIcon, TikTokIcon } from '@/components/icons';
 import { useAuth } from '@/context/auth-context';
 import { Loader2 } from 'lucide-react';
 import { PrivacyPolicyModal } from '@/components/privacy-policy-modal';
+import { useTranslation } from 'react-i18next';
 
 export function LoginPage() {
   const { loginWithGoogle, loading } = useAuth();
+  const { t } = useTranslation();
   const currentYear = new Date().getFullYear();
 
   return (
@@ -25,15 +27,15 @@ export function LoginPage() {
 
           <div className="mb-4 mt-8">
             <h1 className="font-headline text-5xl font-bold tracking-tighter text-primary sm:text-6xl">
-              Calculadora 3D
+              {t('app_title')}
             </h1>
             <p className="font-headline text-2xl text-muted-foreground">
-              by Luprintech
+              {t('login_by')}
             </p>
           </div>
 
           <p className="mx-auto mt-4 max-w-sm text-lg text-muted-foreground">
-            Calcula al instante el precio de tus impresiones 3D con precisión.
+            {t('login_tagline')}
           </p>
 
           <div className="mt-8">
@@ -47,7 +49,7 @@ export function LoginPage() {
                 ? <Loader2 className="mr-3 h-5 w-5 animate-spin" />
                 : <GoogleIcon className="mr-3 h-6 w-6" />
               }
-              Iniciar sesión con Google
+              {t('login_btn')}
             </Button>
           </div>
         </div>
@@ -69,17 +71,17 @@ export function LoginPage() {
           </a>
         </div>
         <p className="mb-2">
-          ¿Tienes dudas? Escríbeme a{' '}
+          {t('login_contact')}{' '}
           <a href="mailto:luprintech@gmail.com" className="text-primary hover:underline">
             luprintech@gmail.com
           </a>
         </p>
-        <p className="mb-2">&copy; {currentYear} Guadalupe Cano. Todos los derechos reservados.</p>
+        <p className="mb-2">{t('footer_copyright', { year: currentYear })}</p>
         <p>
           <PrivacyPolicyModal
             trigger={
               <button className="text-primary hover:underline underline-offset-2 transition-colors">
-                Política de Privacidad y Cookies
+                {t('footer_privacy')}
               </button>
             }
           />

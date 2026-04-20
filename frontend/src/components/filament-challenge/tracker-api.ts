@@ -1,6 +1,7 @@
 import type { FilamentProject, FilamentPiece } from './filament-types';
 import type { ProjectInput, PieceInput } from './use-filament-storage';
 import { parseTimeBlock, parseGramBlock } from './filament-storage';
+import { HttpClientError, httpRequest, jsonRequest } from '@/shared/api/http-client';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -26,20 +27,18 @@ function classifyError(status: number, url: string): TrackerApiErrorKind {
 }
 
 async function apiFetch<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, { credentials: 'include', ...init });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({})) as { error?: string };
-    throw new TrackerApiError(
-      body.error ?? `HTTP ${res.status}`,
-      res.status,
-      classifyError(res.status, url),
-    );
+  try {
+    return await httpRequest<T>({ url, init });
+  } catch (error) {
+    if (error instanceof HttpClientError) {
+      throw new TrackerApiError(
+        error.message,
+        error.status,
+        classifyError(error.status, url),
+      );
+    }
+    throw error;
   }
-  return res.json() as Promise<T>;
-}
-
-function json(init: Omit<RequestInit, 'body'>, body: unknown): RequestInit {
-  return { ...init, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
 }
 
 // ── Projects ──────────────────────────────────────────────────────────────────
@@ -51,12 +50,12 @@ export async function apiGetProjects(): Promise<FilamentProject[]> {
 export async function apiCreateProject(input: ProjectInput): Promise<{ id: string }> {
   return apiFetch<{ id: string }>(
     '/api/tracker/projects',
-    json({ method: 'POST' }, input),
+    jsonRequest('POST', input),
   );
 }
 
 export async function apiUpdateProject(id: string, input: ProjectInput): Promise<void> {
-  await apiFetch<unknown>(`/api/tracker/projects/${id}`, json({ method: 'PUT' }, input));
+  await apiFetch<unknown>(`/api/tracker/projects/${id}`, jsonRequest('PUT', input));
 }
 
 export async function apiDeleteProject(id: string): Promise<void> {
@@ -77,12 +76,13 @@ export async function apiCreatePiece(
   const grams = parseGramBlock(input.gramText);
   return apiFetch<{ id: string; totalCost: number }>(
     `/api/tracker/projects/${projectId}/pieces`,
-    json({ method: 'POST' }, {
+    jsonRequest('POST', {
       ...input,
       totalSecs:  time.totalSecs,
       totalGrams: grams.totalGrams,
       timeLines:  time.validLines,
       gramLines:  grams.validLines,
+      imageUrl:   input.imageUrl ?? null,
     }),
   );
 }
@@ -96,12 +96,13 @@ export async function apiUpdatePiece(
   const grams = parseGramBlock(input.gramText);
   return apiFetch<{ totalCost: number }>(
     `/api/tracker/projects/${projectId}/pieces/${pieceId}`,
-    json({ method: 'PUT' }, {
+    jsonRequest('PUT', {
       ...input,
       totalSecs:  time.totalSecs,
       totalGrams: grams.totalGrams,
       timeLines:  time.validLines,
       gramLines:  grams.validLines,
+      imageUrl:   input.imageUrl ?? null,
     }),
   );
 }
@@ -113,6 +114,6 @@ export async function apiDeletePiece(projectId: string, pieceId: string): Promis
 export async function apiReorderPieces(projectId: string, orderedIds: string[]): Promise<void> {
   await apiFetch<unknown>(
     `/api/tracker/projects/${projectId}/pieces/reorder`,
-    json({ method: 'POST' }, { orderedIds }),
+    jsonRequest('POST', { orderedIds }),
   );
 }

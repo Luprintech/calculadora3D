@@ -15,20 +15,23 @@ import { ChallengeForm } from './challenge-form';
 import { ChallengePieceList } from './challenge-piece-list';
 import { TrackerPrintSummary } from './tracker-print-summary';
 import { TrackerGalaxyBackground } from './tracker-galaxy-background';
+import { TrackerPdfCustomizer } from '@/components/tracker-pdf-customizer';
+import { computeProjectStats } from './filament-storage';
+import type { TrackerPdfData } from '@/features/tracker/api/use-tracker-pdf';
 import type { EditingState, FilamentProject, TrackerView } from './filament-types';
 import type { PieceInput, ProjectInput } from './use-filament-storage';
+import { useTranslation } from 'react-i18next';
 
 // ── Login gate ────────────────────────────────────────────────────────────────
 
 function LoginPrompt() {
   const { loginWithGoogle } = useAuth();
+  const { t } = useTranslation();
   return (
     <div className="challenge-panel flex flex-col items-center justify-center gap-6 rounded-[24px] border border-white/[0.10] p-10 text-center">
-      <div className="challenge-gradient-text text-4xl font-black leading-none">LUPRINTECH</div>
+      <div className="challenge-gradient-text text-4xl font-black leading-none">{t('tracker_login_title')}</div>
       <p className="max-w-sm text-sm leading-relaxed text-muted-foreground">
-        Inicia sesión con Google para acceder al{' '}
-        <strong className="text-foreground">tracker de series y proyectos</strong>{' '}
-        y guardar tu progreso en la nube.
+        {t('tracker_login_text')}
       </p>
       <Button
         onClick={loginWithGoogle}
@@ -36,7 +39,7 @@ function LoginPrompt() {
         size="lg"
       >
         <GoogleIcon className="mr-2 h-5 w-5" />
-        Iniciar sesión con Google
+        {t('tracker_login_btn')}
       </Button>
     </div>
   );
@@ -46,6 +49,7 @@ function LoginPrompt() {
 
 export function FilamentTracker() {
   const { user, loading: authLoading } = useAuth();
+  const { t } = useTranslation();
 
   const {
     loading, error,
@@ -58,12 +62,33 @@ export function FilamentTracker() {
   const [editingState, setEditingState] = useState<EditingState>({ mode: 'create' });
   const [editingProject, setEditingProject] = useState<FilamentProject | null>(null);
   const [deleteTargetProject, setDeleteTargetProject] = useState<FilamentProject | null>(null);
+  const [pdfCustomizerOpen, setPdfCustomizerOpen] = useState(false);
 
-  function printProjectSummary() {
-    setTimeout(() => {
-      window.print();
-    }, 100);
+  function openPdfCustomizer() {
+    setPdfCustomizerOpen(true);
   }
+
+  // Preparar datos para el PDF
+  const trackerPdfData: TrackerPdfData | null = activeProject ? {
+    projectTitle: activeProject.title,
+    projectDescription: activeProject.description,
+    projectGoal: activeProject.goal,
+    projectCurrency: activeProject.currency,
+    projectPricePerKg: activeProject.pricePerKg,
+    coverImage: activeProject.coverImage,
+    totalPieces: activeProject.totalPieces,
+    totalSecs: activeProject.totalSecs,
+    totalGrams: activeProject.totalGrams,
+    totalCost: activeProject.totalCost,
+    pieces: pieces.map(piece => ({
+      label: piece.label,
+      name: piece.name,
+      totalSecs: piece.totalSecs,
+      totalGrams: piece.totalGrams,
+      totalCost: piece.totalCost,
+      imageUrl: piece.imageUrl,
+    })),
+  } : null;
 
   if (authLoading) {
     return (
@@ -87,10 +112,10 @@ export function FilamentTracker() {
     const trackerError = error instanceof TrackerApiError ? error : null;
     const message =
       trackerError?.kind === 'runtime-mismatch'
-        ? 'El backend activo no tiene cargadas las rutas del tracker. Reiniciá el backend en modo desarrollo o arrancalo con una build fresca.'
+        ? t('tracker_error_runtime')
         : trackerError?.kind === 'auth'
-          ? 'Tu sesión no está disponible para el tracker. Volvé a iniciar sesión con Google.'
-          : `Error al cargar los proyectos: ${error.message}`;
+          ? t('tracker_error_auth')
+          : t('tracker_error_generic', { message: error.message });
 
     return (
       <div className="rounded-[24px] border border-destructive/30 bg-destructive/10 p-6 text-center text-sm font-bold text-destructive">
@@ -188,7 +213,7 @@ export function FilamentTracker() {
           project={activeProject}
           pieces={pieces}
           onBack={handleBack}
-          onPrint={printProjectSummary}
+          onPrint={openPdfCustomizer}
           onEditProject={() => setEditingProject(activeProject)}
           onDeleteProject={() => setDeleteTargetProject(activeProject)}
         />
@@ -223,9 +248,9 @@ export function FilamentTracker() {
       <Dialog open={!!editingProject} onOpenChange={(open) => !open && setEditingProject(null)}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Editar proyecto</DialogTitle>
+            <DialogTitle>{t('tracker_edit_project')}</DialogTitle>
             <DialogDescription>
-              Los costes del tracker se recalcularán automáticamente si cambias el precio/kg.
+              {t('tracker_edit_project_hint')}
             </DialogDescription>
           </DialogHeader>
           {editingProject && (
@@ -240,7 +265,7 @@ export function FilamentTracker() {
               }}
               onSubmit={(input) => handleUpdateProject(editingProject.id, input)}
               onCancel={() => setEditingProject(null)}
-              submitLabel="Guardar cambios"
+              submitLabel={t('save_changes')}
             />
           )}
         </DialogContent>
@@ -249,23 +274,32 @@ export function FilamentTracker() {
       <Dialog open={!!deleteTargetProject} onOpenChange={(open) => !open && setDeleteTargetProject(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Eliminar proyecto</DialogTitle>
+            <DialogTitle>{t('tracker_delete_project')}</DialogTitle>
             <DialogDescription>
-              ¿Eliminar <strong>{deleteTargetProject?.title}</strong> y todas sus piezas? Esta acción no se puede deshacer.
+              {t('tracker_delete_project_confirm', { title: deleteTargetProject?.title ?? '' })}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <DialogClose asChild>
-              <Button variant="outline" className="rounded-full">Cancelar</Button>
+              <Button variant="outline" className="rounded-full">{t('cancel')}</Button>
             </DialogClose>
             {deleteTargetProject && (
               <Button variant="destructive" className="rounded-full" onClick={() => handleDeleteProject(deleteTargetProject.id)}>
-                Eliminar
+                {t('delete')}
               </Button>
             )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* PDF Customizer Modal */}
+      {trackerPdfData && (
+        <TrackerPdfCustomizer
+          open={pdfCustomizerOpen}
+          onOpenChange={setPdfCustomizerOpen}
+          trackerData={trackerPdfData}
+        />
+      )}
     </div>
   );
 }

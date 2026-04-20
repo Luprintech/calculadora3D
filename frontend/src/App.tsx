@@ -1,9 +1,11 @@
 import React from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Github, Youtube, Instagram, FolderOpen, LogOut, Sun, Moon, Download } from 'lucide-react';
+import { Github, Youtube, Instagram, FolderOpen, LogOut, Sun, Moon, Download, Calculator as CalculatorIcon, BarChart3 } from 'lucide-react';
 import { Loader2 } from 'lucide-react';
 import { useTheme } from 'next-themes';
+import { useTranslation } from 'react-i18next';
+import { motion } from 'framer-motion';
 import { ThemeProvider } from '@/components/theme-provider';
 import { Toaster } from '@/components/ui/toaster';
 import { CalculatorForm } from '@/components/calculator-form';
@@ -22,14 +24,18 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { FilamentTracker } from '@/components/filament-challenge/filament-tracker';
 import { TrackerGalaxyBackground } from '@/components/filament-challenge/tracker-galaxy-background';
 import { CostProjectsPanel } from '@/components/cost-projects-panel';
+import { LanguageSelector } from '@/components/language-selector';
+import { ErrorBoundary } from '@/components/error-boundary';
+import { QueryProvider } from '@/components/query-provider';
 
 function ThemeToggle() {
   const { resolvedTheme, setTheme } = useTheme();
+  const { t } = useTranslation();
   return (
     <Button
       variant="outline"
       size="icon"
-      title={resolvedTheme === 'dark' ? 'Cambiar a modo día' : 'Cambiar a modo noche'}
+      aria-label={resolvedTheme === 'dark' ? t('theme_dark') : t('theme_light')}
       onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
     >
       {resolvedTheme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
@@ -39,6 +45,7 @@ function ThemeToggle() {
 
 function Calculator() {
   const { user, logout, loginWithGoogle } = useAuth();
+  const { t } = useTranslation();
   const { canInstall, install } = usePwaInstall();
   const [projectRefreshKey, setProjectRefreshKey] = React.useState(0);
   const form = useForm<FormData>({
@@ -52,9 +59,15 @@ function Calculator() {
   const initials = displayName.charAt(0).toUpperCase();
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-between p-4 sm:p-8 md:p-12">
-      <div className="w-full max-w-5xl">
-        <header className="mb-8 flex flex-col items-center gap-4 text-center print:hidden sm:flex-row sm:justify-between">
+    <main className="flex min-h-screen flex-col items-center px-4 pb-10 pt-6 sm:px-8 md:px-10">
+      <div className="w-full max-w-[1400px]">
+        <motion.header
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
+          className="mb-8 rounded-2xl border border-border/70 bg-card/95 p-4 shadow-[0_12px_36px_rgba(2,8,23,0.10)] backdrop-blur-md print:hidden dark:border-white/10 dark:bg-card/70 dark:shadow-[0_18px_60px_rgba(0,0,0,0.22)] sm:p-5"
+        >
+          <div className="flex flex-col items-center gap-4 text-center sm:flex-row sm:justify-between">
           <div className="flex items-center gap-4">
             <img
               src="/Logo.svg"
@@ -65,21 +78,22 @@ function Calculator() {
             />
             <div className="text-left">
               <h1 className="font-headline text-3xl font-bold tracking-tighter text-primary sm:text-4xl">
-                Calculadora 3D
+                {t('app_title')}
               </h1>
-              <p className="text-sm text-muted-foreground">Bienvenido, {displayName}</p>
+              <p className="text-sm text-muted-foreground">{t('welcome', { name: displayName })}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
             {canInstall && (
-              <Button variant="outline" size="sm" onClick={install} title="Instalar aplicación">
-                <Download className="mr-2 h-4 w-4" /> Instalar
+              <Button variant="outline" size="sm" onClick={install} title={t('install_title')}>
+                <Download className="mr-2 h-4 w-4" /> {t('install')}
               </Button>
             )}
             <ThemeToggle />
+            <LanguageSelector />
             {user ? (
               <>
-                <Button onClick={logout} variant="outline" size="icon" title="Cerrar sesión">
+                <Button onClick={logout} variant="outline" size="icon" title={t('sign_out')}>
                   <LogOut className="h-4 w-4" />
                 </Button>
                 {avatarUrl && (
@@ -91,44 +105,53 @@ function Calculator() {
               </>
             ) : (
               <Button onClick={loginWithGoogle} variant="outline" size="sm">
-                Iniciar sesión con Google
+                {t('sign_in')}
               </Button>
             )}
           </div>
-        </header>
+          </div>
+        </motion.header>
 
         <Tabs defaultValue="calculator" className="w-full">
-          <TabsList className="mb-6 w-full print:hidden sm:w-auto">
-            <TabsTrigger value="calculator" className="flex-1 sm:flex-none font-bold">
-              🧮 Calculadora de costes
+          <TabsList className="mb-7 grid h-auto w-full grid-cols-2 rounded-2xl border border-border/70 bg-card/95 p-1.5 print:hidden dark:border-white/10 dark:bg-card/70 sm:w-[420px]">
+            <TabsTrigger value="calculator" className="rounded-xl py-2.5 font-bold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-lg">
+              <CalculatorIcon className="mr-2 h-4 w-4" />
+              {t('tab_calculator')}
             </TabsTrigger>
-            <TabsTrigger value="challenge" className="flex-1 sm:flex-none font-bold">
-              📊 Tracker de series
+            <TabsTrigger value="challenge" className="rounded-xl py-2.5 font-bold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-lg">
+              <BarChart3 className="mr-2 h-4 w-4" />
+              {t('tab_tracker')}
             </TabsTrigger>
           </TabsList>
 
           <TabsContent value="calculator">
-            <div className="relative overflow-hidden rounded-[32px]">
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.35 }}
+              className="relative overflow-hidden rounded-[32px] border border-border/70 shadow-[0_18px_40px_rgba(2,8,23,0.10)] dark:border-white/10 dark:shadow-[0_24px_80px_rgba(0,0,0,0.28)]"
+            >
               <TrackerGalaxyBackground />
-              <div className="relative z-10 space-y-6 p-1 cost-shell">
-                <section className="cost-hero rounded-[28px] border border-white/[0.10] p-6 sm:p-7">
-                  <div className="mb-1 inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.04] px-3 py-1.5 text-xs font-bold text-[hsl(var(--challenge-blue))]">
-                    🧮 Calculadora de costes
+              <div className="relative z-10 space-y-7 p-3 sm:p-4 cost-shell">
+                <section className="cost-hero rounded-[26px] border border-border/70 p-7 dark:border-white/[0.10] sm:p-8">
+                  <div className="mb-1 inline-flex items-center gap-2 rounded-full border border-border/60 bg-background/70 px-3 py-1.5 text-xs font-bold text-[hsl(var(--challenge-blue))] dark:border-white/[0.08] dark:bg-white/[0.04]">
+                    <CalculatorIcon className="h-3.5 w-3.5" />
+                    {t('calc_hero_badge')}
                   </div>
                   <h2 className="challenge-gradient-text text-3xl font-black leading-none sm:text-4xl">
-                    Calcula, guarda y reutiliza
+                    {t('calc_hero_title')}
                   </h2>
                   <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-                    Define tu trabajo, calcula el coste real de impresión y guarda tus proyectos para reutilizarlos cuando quieras.
+                    {t('calc_hero_subtitle')}
                   </p>
                 </section>
 
-                <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_340px] 2xl:grid-cols-[minmax(0,1fr)_360px]">
+                <div className="grid grid-cols-1 gap-7 xl:grid-cols-[minmax(0,1fr)_380px]">
                   <CalculatorForm form={form} onProjectSaved={() => setProjectRefreshKey((value) => value + 1)} />
                   <CostProjectsPanel form={form} refreshKey={projectRefreshKey} />
                 </div>
               </div>
-            </div>
+            </motion.div>
           </TabsContent>
 
           <TabsContent value="challenge">
@@ -153,18 +176,18 @@ function Calculator() {
           </a>
         </div>
         <p className="mb-2">
-          ¿Tienes dudas o quieres que implemente alguna mejora? Escríbeme a{' '}
+          {t('footer_contact')}{' '}
           <a href="mailto:luprintech@gmail.com" className="text-primary hover:underline">
             luprintech@gmail.com
           </a>
-          {' '}o contáctame por redes sociales.
+          {' '}{t('footer_contact_social')}
         </p>
-        <p className="mb-2">&copy; {currentYear} Guadalupe Cano. Todos los derechos reservados.</p>
+        <p className="mb-2">{t('footer_copyright', { year: currentYear })}</p>
         <p>
           <PrivacyPolicyModal
             trigger={
               <button className="text-primary hover:underline underline-offset-2 transition-colors">
-                Política de Privacidad y Cookies
+                {t('footer_privacy')}
               </button>
             }
           />
@@ -195,10 +218,14 @@ function AppContent() {
 export default function App() {
   return (
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-      <AuthProvider>
-        <AppContent />
-        <Toaster />
-      </AuthProvider>
+      <ErrorBoundary>
+        <QueryProvider>
+          <AuthProvider>
+            <AppContent />
+            <Toaster />
+          </AuthProvider>
+        </QueryProvider>
+      </ErrorBoundary>
     </ThemeProvider>
   );
 }

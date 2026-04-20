@@ -1,11 +1,8 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { getAuthUser, logoutAuth, type AuthUser } from '@/features/auth/api/auth-api';
+import { useAuthUser } from '@/features/auth/api/use-auth';
 
-export interface LocalUser {
-  id: string;
-  email: string | null;
-  name: string | null;
-  photo: string | null;
-}
+export type LocalUser = AuthUser;
 
 interface AuthContextType {
   user: LocalUser | null;
@@ -17,29 +14,28 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<LocalUser | null>(null);
-  const [loading, setLoading] = useState(true);
+  // Usar React Query para obtener el usuario
+  const { data: user, isLoading } = useAuthUser();
+  const [localLoading, setLocalLoading] = useState(true);
 
+  // Sincronizar loading state para compatibilidad con el código existente
   useEffect(() => {
-    fetch('/api/auth/user')
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => setUser(data?.user ?? null))
-      .catch(() => setUser(null))
-      .finally(() => setLoading(false));
-  }, []);
+    if (!isLoading) {
+      setLocalLoading(false);
+    }
+  }, [isLoading]);
 
   const loginWithGoogle = () => {
     window.location.href = '/api/auth/google';
   };
 
   const logout = async () => {
-    await fetch('/api/auth/logout');
-    setUser(null);
+    await logoutAuth();
     window.location.href = '/';
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, loginWithGoogle, logout }}>
+    <AuthContext.Provider value={{ user: user ?? null, loading: isLoading || localLoading, loginWithGoogle, logout }}>
       {children}
     </AuthContext.Provider>
   );

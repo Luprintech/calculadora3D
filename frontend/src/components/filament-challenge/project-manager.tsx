@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { Search } from 'lucide-react';
+import { Search, Target, BarChart3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -11,6 +11,7 @@ import {
 import { formatCost, secsToString } from './filament-storage';
 import type { FilamentProject } from './filament-types';
 import type { ProjectInput } from './use-filament-storage';
+import { useTranslation } from 'react-i18next';
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -35,6 +36,7 @@ interface ProjectFormProps {
 }
 
 export function ProjectForm({ defaultValues, onSubmit, onCancel, submitLabel }: ProjectFormProps) {
+  const { t } = useTranslation();
   const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm<ProjectFormValues>({
     defaultValues: defaultValues ?? {
       title: '', description: '', coverImage: '', goal: '30', pricePerKg: '20.00', currency: 'EUR',
@@ -55,7 +57,7 @@ export function ProjectForm({ defaultValues, onSubmit, onCancel, submitLabel }: 
     canvas.height = height;
 
     const ctx = canvas.getContext('2d');
-    if (!ctx) throw new Error('No se pudo preparar la imagen');
+    if (!ctx) throw new Error(t('pm_image_error'));
 
     ctx.drawImage(imageBitmap, 0, 0, width, height);
     return canvas.toDataURL('image/jpeg', 0.82);
@@ -83,70 +85,86 @@ export function ProjectForm({ defaultValues, onSubmit, onCancel, submitLabel }: 
     <form onSubmit={handleSubmit(handleValid)} noValidate className="space-y-4">
       <div className="space-y-1.5">
         <Label htmlFor="pm-title" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-          Nombre del proyecto *
+          {t('pm_name')} *
         </Label>
         <Input
           id="pm-title"
-          placeholder="Ej: Serie Navidad, Reto agosto, Control mensual..."
-          {...register('title', { required: 'El nombre es obligatorio.' })}
+          placeholder={t('pm_name_placeholder')}
+          {...register('title', { required: t('pm_name_required') })}
         />
         {errors.title && <p className="text-xs font-semibold text-destructive">{errors.title.message}</p>}
       </div>
 
       <div className="space-y-1.5">
         <Label htmlFor="pm-desc" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-          Descripción (opcional)
+          {t('pm_desc')}
         </Label>
         <Input
           id="pm-desc"
-          placeholder="Ej: Figuras de anime para el mercadillo"
+          placeholder={t('pm_desc_placeholder')}
           {...register('description')}
         />
       </div>
 
-      <div className="space-y-1.5">
-        <Label htmlFor="pm-cover" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-          Imagen de portada (opcional)
+      <div className="space-y-2">
+        <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+          {t('pm_cover')}
         </Label>
-        <Input
+        <div className="flex items-start gap-3">
+          {coverImage ? (
+            <div className="overflow-hidden shrink-0 rounded-[14px] border border-white/[0.08] bg-black/20">
+              <img src={coverImage} alt="Vista previa de portada" className="h-20 w-20 object-cover" />
+            </div>
+          ) : (
+            <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-[14px] border border-dashed border-white/[0.18] bg-white/[0.03] text-muted-foreground">
+              <span className="text-2xl">🖼️</span>
+            </div>
+          )}
+          <div className="flex flex-col gap-1.5">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="rounded-full text-xs font-bold"
+              onClick={() => document.getElementById('pm-cover-file')?.click()}
+            >
+                {coverImage ? t('pm_cover_change') : t('pm_cover_upload')}
+              </Button>
+            {coverImage && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="rounded-full text-xs font-bold border-destructive/30 text-destructive hover:bg-destructive/10"
+                onClick={() => setValue('coverImage', '')}
+              >
+                {t('pm_cover_remove')}
+              </Button>
+            )}
+            <p className="text-[0.75rem] text-muted-foreground">{t('pm_cover_hint')}</p>
+          </div>
+        </div>
+        <input
           id="pm-cover-file"
           type="file"
           accept="image/*"
+          className="hidden"
           onChange={handleCoverUpload}
         />
-        <Input
-          id="pm-cover"
-          type="url"
-          placeholder="https://... o pegá una URL de imagen"
-          {...register('coverImage')}
-        />
-        <p className="text-[0.78rem] text-muted-foreground">
-          Podés subir una imagen desde tu equipo o pegar una URL.
-        </p>
-        {coverImage && (
-          <div className="overflow-hidden rounded-[16px] border border-white/[0.08] bg-black/20">
-            <img src={coverImage} alt="Vista previa de portada" className="h-36 w-full object-cover" />
-          </div>
-        )}
-        {coverImage && (
-          <Button type="button" variant="outline" className="rounded-full text-xs font-bold" onClick={() => setValue('coverImage', '')}>
-            Quitar portada
-          </Button>
-        )}
       </div>
 
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-1.5">
           <Label htmlFor="pm-goal" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-            Meta de piezas
+            {t('pm_goal')}
           </Label>
           <Input id="pm-goal" type="number" min={1} placeholder="30" {...register('goal')} />
-          <p className="text-[0.78rem] text-muted-foreground">¿Cuántas piezas quieres hacer?</p>
+          <p className="text-[0.78rem] text-muted-foreground">{t('pm_goal_hint')}</p>
         </div>
 
         <div className="space-y-1.5">
           <Label htmlFor="pm-currency" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-            Moneda
+            {t('pm_currency')}
           </Label>
           <select
             id="pm-currency"
@@ -160,7 +178,7 @@ export function ProjectForm({ defaultValues, onSubmit, onCancel, submitLabel }: 
 
       <div className="space-y-1.5">
         <Label htmlFor="pm-price" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-          Precio por kg de filamento
+          {t('pm_price_kg')}
         </Label>
         <Input
           id="pm-price"
@@ -171,7 +189,7 @@ export function ProjectForm({ defaultValues, onSubmit, onCancel, submitLabel }: 
           {...register('pricePerKg')}
         />
         <p className="text-[0.78rem] text-muted-foreground">
-          Precio del carrete por kg. Lo usamos para calcular el coste de cada pieza automáticamente.
+          {t('pm_price_kg_hint')}
         </p>
       </div>
 
@@ -180,7 +198,7 @@ export function ProjectForm({ defaultValues, onSubmit, onCancel, submitLabel }: 
           {submitLabel}
         </Button>
         <Button type="button" variant="outline" onClick={onCancel} className="rounded-full font-bold">
-          Cancelar
+          {t('pm_cancel')}
         </Button>
       </div>
     </form>
@@ -194,17 +212,18 @@ interface EmptyStateProps {
 }
 
 function EmptyState({ onCreate }: EmptyStateProps) {
+  const { t } = useTranslation();
   return (
     <div className="flex flex-col items-center gap-6 rounded-[24px] border border-dashed border-white/[0.12] bg-white/[0.02] px-8 py-16 text-center">
       <div className="challenge-gradient-text text-5xl font-black leading-none">TRACKER</div>
       <div className="space-y-1">
-        <p className="font-bold text-foreground">Aún no tienes proyectos</p>
+        <p className="font-bold text-foreground">{t('pm_empty_title')}</p>
         <p className="max-w-xs text-sm text-muted-foreground">
-          Crea tu primer proyecto para empezar a trackear piezas, tiempo, gramos y coste.
+          {t('pm_empty_subtitle')}
         </p>
       </div>
       <Button className="challenge-btn-primary rounded-full px-6 font-extrabold" onClick={onCreate}>
-        + Crear primer proyecto
+        {t('pm_empty_btn')}
       </Button>
     </div>
   );
@@ -225,6 +244,8 @@ interface ProjectManagerProps {
 export function ProjectManager({
   projects, activeProjectId, onCreate, onUpdate, onDelete, onSelect, onOpenProject,
 }: ProjectManagerProps) {
+  const { t } = useTranslation();
+  const iconClass = 'h-4 w-4';
   const [createOpen, setCreateOpen]   = useState(false);
   const [editing, setEditing]         = useState<FilamentProject | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<FilamentProject | null>(null);
@@ -286,13 +307,14 @@ export function ProjectManager({
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <div className="mb-1 inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.04] px-3 py-1.5 text-xs font-bold text-[hsl(var(--challenge-blue))]">
-              📊 Tracker de series
+              <BarChart3 className={iconClass} />
+              {t('pm_badge')}
             </div>
             <h2 className="challenge-gradient-text text-3xl font-black leading-none sm:text-4xl">
-              Mis proyectos
+              {t('pm_title')}
             </h2>
             <p className="mt-1.5 max-w-md text-sm text-muted-foreground">
-              Cada proyecto es una serie, un reto o un control de producción. Crea los que necesites.
+              {t('pm_subtitle')}
             </p>
           </div>
           {projects.length > 0 && (
@@ -300,7 +322,7 @@ export function ProjectManager({
               className="challenge-btn-primary shrink-0 rounded-full px-5 font-extrabold"
               onClick={() => setCreateOpen(true)}
             >
-              + Nuevo proyecto
+              {t('pm_new')}
             </Button>
           )}
         </div>
@@ -338,12 +360,12 @@ export function ProjectManager({
                 </div>
 
                 <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                  {[
-                    { label: 'Piezas', value: `${selectedProject.totalPieces} / ${selectedProject.goal}`, color: 'text-[hsl(var(--challenge-pink))]' },
-                    { label: 'Tiempo', value: secsToString(selectedProject.totalSecs), color: 'text-[hsl(var(--challenge-blue))]' },
-                    { label: 'Filamento', value: `${selectedProject.totalGrams.toFixed(1)}g`, color: 'text-[hsl(var(--challenge-green))]' },
-                    { label: 'Coste', value: formatCost(selectedProject.totalCost, selectedProject.currency), color: 'text-yellow-400' },
-                  ].map((s) => (
+                    {[
+                      { label: t('pm_stat_pieces'), value: `${selectedProject.totalPieces} / ${selectedProject.goal}`, color: 'text-[hsl(var(--challenge-pink))]' },
+                      { label: t('pm_stat_time'), value: secsToString(selectedProject.totalSecs), color: 'text-[hsl(var(--challenge-blue))]' },
+                      { label: t('pm_stat_filament'), value: `${selectedProject.totalGrams.toFixed(1)}g`, color: 'text-[hsl(var(--challenge-green))]' },
+                      { label: t('pm_stat_cost'), value: formatCost(selectedProject.totalCost, selectedProject.currency), color: 'text-yellow-400' },
+                    ].map((s) => (
                     <div key={s.label} className="challenge-stat-card rounded-[18px] border border-white/[0.08] p-4">
                       <p className="text-[0.74rem] font-bold uppercase tracking-widest text-muted-foreground">{s.label}</p>
                       <p className={`mt-1.5 text-lg font-black ${s.color}`}>{s.value}</p>
@@ -365,7 +387,7 @@ export function ProjectManager({
                   className="challenge-btn-primary w-full rounded-full font-extrabold"
                   onClick={() => onOpenProject(selectedProject.id)}
                 >
-                  Abrir proyecto →
+                  {t('pm_open')}
                 </Button>
               </div>
             </>
@@ -373,16 +395,16 @@ export function ProjectManager({
         </div>
 
         <aside className="challenge-panel rounded-[24px] border border-white/[0.10] p-5 pb-10 lg:max-h-[720px] xl:sticky xl:top-4 xl:h-[760px] xl:max-h-[760px]">
-          <h3 className="mb-4 text-lg font-extrabold text-foreground">Series guardadas</h3>
+          <h3 className="mb-4 text-lg font-extrabold text-foreground">{t('pm_saved_series')}</h3>
           <div className="relative mb-4">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Search className={`pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground ${iconClass}`} />
             <Input
               value={query}
               onChange={(event) => {
                 setQuery(event.target.value);
                 setCurrentPage(1);
               }}
-              placeholder="Buscar serie..."
+              placeholder={t('pm_search')}
               className="challenge-input pl-9"
             />
           </div>
@@ -405,7 +427,9 @@ export function ProjectManager({
                     {project.coverImage ? (
                       <img src={project.coverImage} alt={`Portada de ${project.title}`} className="h-12 w-12 shrink-0 rounded-xl object-cover sm:h-14 sm:w-14" />
                     ) : (
-                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white/[0.05] text-base sm:h-14 sm:w-14 sm:text-xl">🎯</div>
+                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white/[0.05] text-[hsl(var(--challenge-blue))] sm:h-14 sm:w-14">
+                        <Target className="h-5 w-5 text-[hsl(var(--challenge-blue))]" />
+                      </div>
                     )}
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-[0.82rem] font-extrabold text-foreground sm:text-sm">{project.title}</p>
@@ -429,7 +453,7 @@ export function ProjectManager({
           </div>
           {filteredProjects.length === 0 ? (
             <div className="rounded-[18px] border border-dashed border-white/[0.12] bg-white/[0.02] px-4 py-8 text-center text-sm text-muted-foreground">
-              No hay series que coincidan con tu búsqueda.
+              {t('pm_no_results')}
             </div>
           ) : totalPages > 1 && (
             <div className="mb-3 mt-1 border-t border-white/[0.08] bg-[hsl(var(--card))/0.96] pt-3 pb-1 backdrop-blur-sm xl:sticky xl:bottom-4">
@@ -442,10 +466,10 @@ export function ProjectManager({
                 onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
                 disabled={currentPage === 1}
               >
-                ← Anterior
+                {t('pm_prev')}
               </Button>
               <span className="text-center text-xs font-bold text-muted-foreground">
-                Página {currentPage} de {totalPages}
+                {t('pm_page', { current: currentPage, total: totalPages })}
               </span>
               <Button
                 type="button"
@@ -455,7 +479,7 @@ export function ProjectManager({
                 onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
                 disabled={currentPage === totalPages}
               >
-                Siguiente →
+                {t('pm_next')}
               </Button>
             </div>
             </div>
@@ -469,15 +493,15 @@ export function ProjectManager({
       <Dialog open={createOpen} onOpenChange={(o) => !o && setCreateOpen(false)}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Nuevo proyecto</DialogTitle>
+            <DialogTitle>{t('pm_dialog_title')}</DialogTitle>
             <DialogDescription>
-              Configura tu proyecto. Podrás editar todo esto después desde las opciones.
+              {t('pm_dialog_subtitle')}
             </DialogDescription>
           </DialogHeader>
           <ProjectForm
             onSubmit={handleCreate}
             onCancel={() => setCreateOpen(false)}
-            submitLabel="Crear proyecto"
+            submitLabel={t('pm_create_btn')}
           />
         </DialogContent>
       </Dialog>

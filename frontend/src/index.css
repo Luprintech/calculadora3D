@@ -28,6 +28,9 @@
     --border: 220 13% 89%;
     --input: 220 13% 89%;
     --ring: 197 76% 53%;
+    --challenge-pink: 291 65% 45%;
+    --challenge-blue: 197 76% 38%;
+    --challenge-green: 160 60% 36%;
     --radius: 0.5rem;
   }
 
@@ -114,6 +117,51 @@
 
 /* ── Challenge: componentes específicos del reto de 30 días ───────────────── */
 @layer components {
+
+  .challenge-hero, .cost-hero {
+    background: linear-gradient(180deg, hsl(0 0% 100% / 0.90), hsl(0 0% 98% / 0.95));
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
+    border: 1px solid hsl(220 13% 89%);
+  }
+
+  .challenge-panel {
+    background: hsl(0 0% 100% / 0.85);
+    backdrop-filter: blur(8px);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  }
+
+  .challenge-stat-card {
+    background: linear-gradient(180deg, rgba(0,0,0,0.02), rgba(0,0,0,0.01));
+  }
+
+  .challenge-gradient-text {
+    background: linear-gradient(90deg, hsl(var(--challenge-pink)), #7c5cbf 45%, hsl(var(--challenge-blue)));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .challenge-btn-primary {
+    background: linear-gradient(90deg, hsl(var(--challenge-pink)), hsl(var(--challenge-blue)));
+    color: white;
+    box-shadow: 0 4px 14px hsl(var(--challenge-blue) / 0.25);
+    border: none;
+  }
+  .challenge-btn-primary:hover {
+    box-shadow: 0 8px 20px hsl(var(--challenge-blue) / 0.35);
+    transform: translateY(-1px);
+  }
+
+  .tracker-milestone-banner {
+    background: linear-gradient(135deg, hsl(var(--challenge-pink) / 0.15), hsl(var(--challenge-blue) / 0.12));
+    border: 1px solid hsl(var(--challenge-pink) / 0.2);
+  }
+
+  .challenge-input:focus,
+  .challenge-textarea:focus {
+    border-color: hsl(var(--challenge-blue) / 0.60);
+    box-shadow: 0 0 0 3px hsl(var(--challenge-blue) / 0.10);
+  }
 
   /* Hero section del reto */
   .dark .challenge-hero {

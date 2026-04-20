@@ -1,0 +1,216 @@
+import { useState } from 'react';
+import type { UseFormReturn } from 'react-hook-form';
+import type { TFunction } from 'i18next';
+import { defaultFormValues } from '@/lib/defaults';
+import type { FormData } from '@/lib/schema';
+import type { LocalUser } from '@/context/auth-context';
+import type { CostCalculations } from '@/features/calculator/domain/cost-calculator';
+import { buildShareSummary } from '@/features/calculator/lib/share-summary';
+import { useSaveProject } from '@/features/projects/api/use-projects';
+import { useGcodeAnalysis } from '@/features/calculator/api/use-gcode-analysis';
+
+interface ToastInput {
+  variant?: 'destructive' | 'default';
+  title: string;
+  description?: string;
+}
+
+type ToastFn = (input: ToastInput) => void;
+
+interface UseCalculatorActionsInput {
+  form: UseFormReturn<FormData>;
+  user: LocalUser | null;
+  loginWithGoogle: () => void;
+  toast: ToastFn;
+  t: TFunction;
+  watchedValues: FormData;
+  calculations: CostCalculations;
+  onProjectSaved?: () => void;
+}
+
+type AnalysisKind = 'idle' | 'success' | 'partial' | 'empty' | 'error';
+
+interface AnalysisFeedback {
+  kind: AnalysisKind;
+  updated?: string[];
+  missing?: string[];
+  error?: string;
+}
+
+export function useCalculatorActions({
+  form,
+  user,
+  loginWithGoogle,
+  toast,
+  t,
+  watchedValues,
+  calculations,
+  onProjectSaved,
+}: UseCalculatorActionsInput) {
+  const [analysisFeedback, setAnalysisFeedback] = useState<AnalysisFeedback>({ kind: 'idle' });
+
+  // Usar hooks de React Query en lugar de llamadas manuales
+  const saveProjectMutation = useSaveProject();
+  const gcodeAnalysisMutation = useGcodeAnalysis();
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('es-ES', {
+      style: 'currency',
+      currency: watchedValues.currency || 'EUR',
+      minimumFractionDigits: 2,
+    }).format(amount);
+  };
+
+  const handleNewProject = () => {
+    form.reset(defaultFormValues);
+    toast({ title: t('toast_new_project'), description: t('toast_new_project_msg') });
+  };
+
+  const handleSaveProject = async () => {
+    if (!user) {
+      loginWithGoogle();
+      return;
+    }
+
+    const isValid = await form.trigger();
+    if (!isValid) {
+      toast({
+        variant: 'destructive',
+        title: t('toast_missing_fields'),
+        description: t('toast_missing_fields_msg'),
+      });
+      return;
+    }
+
+    const formData = form.getValues();
+    const dataToSave = JSON.parse(JSON.stringify(formData));
+    if (dataToSave.id) delete dataToSave.id;
+
+    // Usar mutation de React Query
+    saveProjectMutation.mutate(dataToSave, {
+      onSuccess: () => {
+        form.reset(defaultFormValues);
+        onProjectSaved?.();
+      },
+    });
+  };
+
+  const handleGcodeAnalyze = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setAnalysisFeedback({ kind: 'idle' });
+
+    // Usar mutation de React Query
+    gcodeAnalysisMutation.mutate(file, {
+      onSuccess: (result) => {
+        const updated: string[] = [];
+        const missing: string[] = [];
+
+        if (result.printingTimeHours !== undefined && result.printingTimeHours > 0) {
+          form.setValue('printingTimeHours', result.printingTimeHours, { shouldValidate: false });
+          form.setValue('printingTimeMinutes', result.printingTimeMinutes || 0, { shouldValidate: false });
+          form.trigger(['printingTimeHours', 'printingTimeMinutes']);
+          updated.push(t('toast_print_time_filled'));
+        } else {
+          missing.push(t('toast_print_time_filled'));
+        }
+
+        if (result.filamentWeight !== undefined && result.filamentWeight > 0) {
+          form.setValue('filamentWeight', parseFloat(result.filamentWeight.toFixed(2)), { shouldValidate: true });
+          updated.push(t('toast_weight_filled'));
+        } else {
+          missing.push(t('toast_weight_filled'));
+        }
+
+        if (updated.length > 0 && missing.length === 0) {
+          toast({ title: t('toast_analysis_ok'), description: t('toast_analysis_ok_msg', { fields: updated.join(' y ') }) });
+          setAnalysisFeedback({ kind: 'success', updated, missing });
+        } else if (updated.length > 0) {
+          toast({
+            title: t('toast_analysis_partial'),
+            description: t('toast_analysis_partial_msg', { updated: updated.join(', '), missing: missing.join(', ') }),
+          });
+          setAnalysisFeedback({ kind: 'partial', updated, missing });
+        } else {
+          toast({ variant: 'destructive', title: t('toast_analysis_none'), description: t('toast_analysis_none_msg') });
+          setAnalysisFeedback({ kind: 'empty', updated, missing });
+        }
+      },
+      onError: (error) => {
+        setAnalysisFeedback({ kind: 'error', error: error.message });
+      },
+      onSettled: () => {
+        if (event.target) event.target.value = '';
+      },
+    });
+  };
+
+  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const MAX_IMAGE_SIZE_KB = 500;
+    if (file.size > MAX_IMAGE_SIZE_KB * 1024) {
+      toast({
+        variant: 'destructive',
+        title: t('toast_image_too_big'),
+        description: t('toast_image_too_big_msg'),
+      });
+      if (event.target) event.target.value = '';
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      form.setValue('projectImage', reader.result as string, { shouldValidate: true });
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handlePrint = () => {
+    setTimeout(() => {
+      window.print();
+    }, 100);
+  };
+
+  const handleShare = async () => {
+    const summaryText = buildShareSummary({
+      t,
+      values: watchedValues,
+      calculations,
+      formatCurrency,
+    });
+
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: t('toast_share_title'),
+          text: summaryText,
+        });
+      } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') {
+          return;
+        }
+        await navigator.clipboard.writeText(summaryText);
+        toast({ title: t('toast_share_copied') });
+      }
+    } else {
+      await navigator.clipboard.writeText(summaryText);
+      toast({ title: t('toast_share_copied') });
+    }
+  };
+
+  return {
+    isAnalyzing: gcodeAnalysisMutation.isPending,
+    isSaving: saveProjectMutation.isPending,
+    analysisFeedback,
+    formatCurrency,
+    handleNewProject,
+    handleSaveProject,
+    handleGcodeAnalyze,
+    handleImageUpload,
+    handlePrint,
+    handleShare,
+  };
+}

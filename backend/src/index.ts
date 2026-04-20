@@ -119,12 +119,31 @@ db.exec(`
     total_cost  REAL NOT NULL DEFAULT 0,
     time_lines  INTEGER NOT NULL DEFAULT 0,
     gram_lines  INTEGER NOT NULL DEFAULT 0,
+    image_url   TEXT,
     created_at  TEXT DEFAULT (datetime('now'))
   );
   CREATE TABLE IF NOT EXISTS sessions (
     sid        TEXT PRIMARY KEY,
     sess       TEXT NOT NULL,
     expires_at INTEGER NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS pdf_customization (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id         TEXT NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+    logo_path       TEXT,
+    primary_color   TEXT DEFAULT '#29aae1',
+    secondary_color TEXT DEFAULT '#333333',
+    accent_color    TEXT DEFAULT '#f0f4f8',
+    company_name    TEXT,
+    footer_text     TEXT,
+    show_machine_costs   INTEGER DEFAULT 1,
+    show_breakdown       INTEGER DEFAULT 1,
+    show_other_costs     INTEGER DEFAULT 1,
+    show_labor_costs     INTEGER DEFAULT 1,
+    show_electricity     INTEGER DEFAULT 1,
+    template_name   TEXT DEFAULT 'default',
+    created_at      TEXT DEFAULT (datetime('now')),
+    updated_at      TEXT DEFAULT (datetime('now'))
   );
 `);
 
@@ -144,6 +163,10 @@ const trackerPieceColumns = db
 
 if (!trackerPieceColumns.some((column) => column.name === 'order_index')) {
   db.exec("ALTER TABLE tracker_pieces ADD COLUMN order_index INTEGER NOT NULL DEFAULT 0");
+}
+
+if (!trackerPieceColumns.some((column) => column.name === 'image_url')) {
+  db.exec("ALTER TABLE tracker_pieces ADD COLUMN image_url TEXT");
 }
 
 migrateLegacyDatabases();
@@ -265,7 +288,40 @@ passport.deserializeUser((id: unknown, done) => {
 // ── Express ───────────────────────────────────────────────────────────────────
 const app = express();
 app.set('trust proxy', 1); // necesario detrás de Nginx
-const upload = multer({ storage: multer.memoryStorage() });
+
+// Configuración de multer para subir archivos
+const storage = multer.memoryStorage();
+const upload = multer({ storage });
+
+// Configuración de multer para logos (disk storage)
+const logoStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    const uploadsDir = path.resolve(__dirname, '../uploads/logos');
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+    cb(null, uploadsDir);
+  },
+  filename: (req, file, cb) => {
+    const user = req.user as DbUser;
+    const ext = path.extname(file.originalname);
+    cb(null, `${user.id}-${Date.now()}${ext}`);
+  },
+});
+
+const uploadLogo = multer({
+  storage: logoStorage,
+  limits: { fileSize: 2 * 1024 * 1024 }, // 2 MB max
+  fileFilter: (_req, file, cb) => {
+    const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/svg+xml'];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      // Rechazar el archivo con un error
+      cb(new Error('Solo se permiten imágenes PNG, JPG o SVG'));
+    }
+  },
+});
 
 app.use(cors({ origin: CLIENT_ORIGIN, credentials: true }));
 app.use(express.json({ limit: '25mb' }));
@@ -308,7 +364,10 @@ app.get('/api/auth/logout', (req, res) => {
 
 app.get('/api/auth/user', (req, res) => {
   if (!req.isAuthenticated()) {
-    res.status(401).json({ user: null });
+    // Endpoint de estado de sesión para el frontend:
+    // devolvemos 200 con user null para evitar ruido de 401 esperado
+    // cuando el usuario simplemente no inició sesión aún.
+    res.json({ user: null });
     return;
   }
   res.json({ user: req.user });
@@ -339,7 +398,7 @@ app.get('/api/projects', requireAuth, (req, res) => {
   const projects = rows.map((row) => ({
     ...JSON.parse(row.data),
     id: row.id,
-    created_at: row.created_at,
+    createdAt: row.created_at,
   }));
 
   res.json(projects);
@@ -453,13 +512,14 @@ app.get('/api/tracker/projects/:projectId/pieces', requireAuth, (req, res) => {
       id: string; project_id: string; order_index: number; label: string; name: string;
       time_text: string; gram_text: string; total_secs: number;
       total_grams: number; total_cost: number; time_lines: number;
-      gram_lines: number; created_at: string;
+      gram_lines: number; image_url: string | null; created_at: string;
     }[];
   res.json(rows.map((r) => ({
     id: r.id, projectId: r.project_id, orderIndex: r.order_index, label: r.label, name: r.name,
     timeText: r.time_text, gramText: r.gram_text,
     totalSecs: r.total_secs, totalGrams: r.total_grams, totalCost: r.total_cost,
     timeLines: r.time_lines, gramLines: r.gram_lines,
+    imageUrl: r.image_url ?? null,
   })));
 });
 
@@ -475,12 +535,12 @@ app.post('/api/tracker/projects/:projectId/pieces', requireAuth, (req, res) => {
     .prepare('SELECT COALESCE(MAX(order_index), -1) + 1 as next_order FROM tracker_pieces WHERE project_id=? AND user_id=?')
     .get(req.params.projectId, user.id) as { next_order: number };
 
-  const { label, name, timeText='', gramText='', totalSecs=0, totalGrams=0, timeLines=0, gramLines=0 } = req.body;
+  const { label, name, timeText='', gramText='', totalSecs=0, totalGrams=0, timeLines=0, gramLines=0, imageUrl=null } = req.body;
   const totalCost = parseFloat((totalGrams * (project.price_per_kg / 1000)).toFixed(4));
   const id = crypto.randomUUID();
   db.prepare(
-    'INSERT INTO tracker_pieces (id, project_id, user_id, order_index, label, name, time_text, gram_text, total_secs, total_grams, total_cost, time_lines, gram_lines) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)'
-  ).run(id, req.params.projectId, user.id, nextOrder.next_order, label, name, timeText, gramText, totalSecs, totalGrams, totalCost, timeLines, gramLines);
+    'INSERT INTO tracker_pieces (id, project_id, user_id, order_index, label, name, time_text, gram_text, total_secs, total_grams, total_cost, time_lines, gram_lines, image_url) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
+  ).run(id, req.params.projectId, user.id, nextOrder.next_order, label, name, timeText, gramText, totalSecs, totalGrams, totalCost, timeLines, gramLines, imageUrl);
   res.json({ id, totalCost });
 });
 
@@ -510,11 +570,11 @@ app.put('/api/tracker/projects/:projectId/pieces/:id', requireAuth, (req, res) =
     .get(req.params.projectId, user.id) as { price_per_kg: number } | undefined;
   if (!project) { res.status(404).json({ error: 'Proyecto no encontrado.' }); return; }
 
-  const { label, name, timeText='', gramText='', totalSecs=0, totalGrams=0, timeLines=0, gramLines=0 } = req.body;
+  const { label, name, timeText='', gramText='', totalSecs=0, totalGrams=0, timeLines=0, gramLines=0, imageUrl=null } = req.body;
   const totalCost = parseFloat((totalGrams * (project.price_per_kg / 1000)).toFixed(4));
   const result = db.prepare(
-    'UPDATE tracker_pieces SET label=?, name=?, time_text=?, gram_text=?, total_secs=?, total_grams=?, total_cost=?, time_lines=?, gram_lines=? WHERE id=? AND user_id=?'
-  ).run(label, name, timeText, gramText, totalSecs, totalGrams, totalCost, timeLines, gramLines, req.params.id, user.id);
+    'UPDATE tracker_pieces SET label=?, name=?, time_text=?, gram_text=?, total_secs=?, total_grams=?, total_cost=?, time_lines=?, gram_lines=?, image_url=? WHERE id=? AND user_id=?'
+  ).run(label, name, timeText, gramText, totalSecs, totalGrams, totalCost, timeLines, gramLines, imageUrl, req.params.id, user.id);
   if (result.changes === 0) { res.status(404).json({ error: 'Pieza no encontrada.' }); return; }
   res.json({ success: true, totalCost });
 });
@@ -682,6 +742,217 @@ app.post('/api/analyze-gcode', upload.single('gcodeFile'), async (req, res) => {
   } catch (e) {
     const message = e instanceof Error ? e.message : 'Error desconocido';
     res.json({ error: `Error al analizar el archivo: ${message}` });
+  }
+});
+
+// ── PDF Customization ─────────────────────────────────────────────────────────
+import { generatePdf, generatePdfHtml, generateTrackerPdf, generateTrackerPdfHtml, PdfCustomization, ProjectData, TrackerPdfData } from './pdf-generator';
+
+// Servir logos estáticos
+app.use('/uploads/logos', express.static(path.resolve(__dirname, '../uploads/logos')));
+
+// GET /api/pdf/config - Obtener configuración del usuario
+app.get('/api/pdf/config', requireAuth, (req, res) => {
+  const user = req.user as DbUser;
+  const config = db
+    .prepare('SELECT * FROM pdf_customization WHERE user_id = ?')
+    .get(user.id) as any | undefined;
+
+  if (!config) {
+    // Devolver configuración por defecto
+    res.json({
+      logoPath: null,
+      primaryColor: '#29aae1',
+      secondaryColor: '#333333',
+      accentColor: '#f0f4f8',
+      companyName: null,
+      footerText: null,
+      showMachineCosts: true,
+      showBreakdown: true,
+      showOtherCosts: true,
+      showLaborCosts: true,
+      showElectricity: true,
+      templateName: 'default',
+    });
+    return;
+  }
+
+  res.json({
+    logoPath: config.logo_path,
+    primaryColor: config.primary_color,
+    secondaryColor: config.secondary_color,
+    accentColor: config.accent_color,
+    companyName: config.company_name,
+    footerText: config.footer_text,
+    showMachineCosts: Boolean(config.show_machine_costs),
+    showBreakdown: Boolean(config.show_breakdown),
+    showOtherCosts: Boolean(config.show_other_costs),
+    showLaborCosts: Boolean(config.show_labor_costs),
+    showElectricity: Boolean(config.show_electricity),
+    templateName: config.template_name,
+  });
+});
+
+// POST /api/pdf/config - Guardar configuración
+app.post('/api/pdf/config', requireAuth, (req, res) => {
+  const user = req.user as DbUser;
+  const {
+    logoPath,
+    primaryColor,
+    secondaryColor,
+    accentColor,
+    companyName,
+    footerText,
+    showMachineCosts,
+    showBreakdown,
+    showOtherCosts,
+    showLaborCosts,
+    showElectricity,
+    templateName,
+  } = req.body;
+
+  const now = new Date().toISOString();
+
+  db.prepare(`
+    INSERT INTO pdf_customization (
+      user_id, logo_path, primary_color, secondary_color, accent_color,
+      company_name, footer_text, show_machine_costs, show_breakdown,
+      show_other_costs, show_labor_costs, show_electricity,
+      template_name, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(user_id) DO UPDATE SET
+      logo_path = excluded.logo_path,
+      primary_color = excluded.primary_color,
+      secondary_color = excluded.secondary_color,
+      accent_color = excluded.accent_color,
+      company_name = excluded.company_name,
+      footer_text = excluded.footer_text,
+      show_machine_costs = excluded.show_machine_costs,
+      show_breakdown = excluded.show_breakdown,
+      show_other_costs = excluded.show_other_costs,
+      show_labor_costs = excluded.show_labor_costs,
+      show_electricity = excluded.show_electricity,
+      template_name = excluded.template_name,
+      updated_at = excluded.updated_at
+  `).run(
+    user.id,
+    logoPath ?? null,
+    primaryColor ?? '#29aae1',
+    secondaryColor ?? '#333333',
+    accentColor ?? '#f0f4f8',
+    companyName ?? null,
+    footerText ?? null,
+    showMachineCosts ? 1 : 0,
+    showBreakdown ? 1 : 0,
+    showOtherCosts ? 1 : 0,
+    showLaborCosts ? 1 : 0,
+    showElectricity ? 1 : 0,
+    templateName ?? 'default',
+    now
+  );
+
+  res.json({ success: true });
+});
+
+// POST /api/pdf/upload-logo - Subir logo
+app.post('/api/pdf/upload-logo', requireAuth, (req, res) => {
+  uploadLogo.single('logo')(req, res, (err: any) => {
+    if (err) {
+      // Error de multer (tamaño, tipo, etc.)
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        res.status(400).json({ error: 'El archivo es demasiado grande. Máximo 2 MB' });
+        return;
+      }
+      if (err.code === 'LIMIT_UNEXPECTED_FILE') {
+        res.status(400).json({ error: 'Campo de archivo inesperado' });
+        return;
+      }
+      // Error personalizado del fileFilter o cualquier otro error
+      res.status(400).json({ error: err.message || 'Error al subir el archivo' });
+      return;
+    }
+
+    if (!req.file) {
+      res.status(400).json({ error: 'No se ha subido ningún archivo' });
+      return;
+    }
+
+    const logoPath = `/uploads/logos/${req.file.filename}`;
+    res.json({ logoPath });
+  });
+});
+
+// POST /api/pdf/preview - Preview HTML del PDF
+app.post('/api/pdf/preview', requireAuth, async (req, res) => {
+  const { projectData, customization } = req.body as {
+    projectData: ProjectData;
+    customization: PdfCustomization;
+  };
+
+  const baseUrl = `${req.protocol}://${req.get('host')}`;
+  const html = generatePdfHtml(projectData, customization, baseUrl);
+
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(html);
+});
+
+// POST /api/pdf/generate - Generar PDF
+app.post('/api/pdf/generate', requireAuth, async (req, res) => {
+  try {
+    const { projectData, customization } = req.body as {
+      projectData: ProjectData;
+      customization: PdfCustomization;
+    };
+
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    const pdf = await generatePdf(projectData, customization, baseUrl);
+
+    const filename = `presupuesto-${projectData.jobName?.replace(/[^a-zA-Z0-9]/g, '-') || 'sin-nombre'}-${Date.now()}.pdf`;
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(pdf);
+  } catch (error) {
+    console.error('[PDF] Error generando PDF:', error);
+    res.status(500).json({ error: 'Error al generar el PDF' });
+  }
+});
+
+// ── Tracker PDF ───────────────────────────────────────────────────────────────
+
+// POST /api/tracker/pdf/preview - Preview HTML del PDF del tracker
+app.post('/api/tracker/pdf/preview', requireAuth, async (req, res) => {
+  const { trackerData, customization } = req.body as {
+    trackerData: TrackerPdfData;
+    customization: PdfCustomization;
+  };
+
+  const baseUrl = `${req.protocol}://${req.get('host')}`;
+  const html = generateTrackerPdfHtml(trackerData, customization, baseUrl);
+
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(html);
+});
+
+// POST /api/tracker/pdf/generate - Generar PDF del tracker
+app.post('/api/tracker/pdf/generate', requireAuth, async (req, res) => {
+  try {
+    const { trackerData, customization } = req.body as {
+      trackerData: TrackerPdfData;
+      customization: PdfCustomization;
+    };
+
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    const pdf = await generateTrackerPdf(trackerData, customization, baseUrl);
+
+    const filename = `tracker-${trackerData.projectTitle.replace(/[^a-zA-Z0-9]/g, '-')}-${Date.now()}.pdf`;
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(pdf);
+  } catch (error) {
+    console.error('[PDF] Error generando PDF del tracker:', error);
+    res.status(500).json({ error: 'Error al generar el PDF del tracker' });
   }
 });
 

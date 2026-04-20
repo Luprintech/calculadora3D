@@ -2,6 +2,7 @@ import React from 'react';
 import { cn } from '@/lib/utils';
 import { computeProjectStats, secsToString, formatCost } from './filament-storage';
 import type { FilamentPiece, FilamentProject } from './filament-types';
+import { useTranslation } from 'react-i18next';
 
 interface StatCardProps {
   label: string;
@@ -40,6 +41,7 @@ interface ChallengeHeroProps {
 }
 
 export function ChallengeHero({ project, pieces, onBack, onPrint, onEditProject, onDeleteProject }: ChallengeHeroProps) {
+  const { t } = useTranslation();
   const stats      = computeProjectStats(pieces, project);
   const isComplete = stats.totalPieces >= project.goal;
 
@@ -57,11 +59,11 @@ export function ChallengeHero({ project, pieces, onBack, onPrint, onEditProject,
         onClick={onBack}
         className="mb-4 inline-flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.04] px-3 py-1.5 text-xs font-bold text-muted-foreground transition-colors hover:text-foreground"
       >
-        ← Todos los proyectos
+        {t('hero_back')}
       </button>
 
       <div className="mb-1 inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.04] px-4 py-2 text-sm font-bold tracking-wide text-[hsl(var(--challenge-blue))]">
-        ✨ Tracker de impresión 3D
+        {t('hero_badge')}
       </div>
 
       <div className="mt-3 flex flex-col gap-4 md:flex-row md:items-center">
@@ -88,27 +90,27 @@ export function ChallengeHero({ project, pieces, onBack, onPrint, onEditProject,
 
       <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         <StatCard
-          label="Piezas"
+          label={t('hero_pieces')}
           value={`${stats.totalPieces} / ${project.goal}`}
           color="pink"
         />
         <StatCard
-          label="Tiempo total"
+          label={t('hero_time')}
           value={secsToString(stats.totalSecs)}
           color="blue"
         />
         <StatCard
-          label="Filamento"
+          label={t('hero_filament')}
           value={`${stats.totalGrams.toFixed(1)}g`}
           color="green"
         />
         <StatCard
-          label="Coste total"
+          label={t('hero_cost')}
           value={formatCost(stats.totalCost, project.currency)}
           color="yellow"
         />
         <StatCard
-          label="Progreso"
+          label={t('hero_progress')}
           value={`${stats.progressPct}%`}
           color="white"
         />
@@ -120,21 +122,21 @@ export function ChallengeHero({ project, pieces, onBack, onPrint, onEditProject,
           onClick={onPrint}
           className="rounded-full border border-white/[0.08] bg-white/[0.04] px-4 py-2 text-sm font-bold text-foreground transition hover:bg-white/[0.08] sm:w-auto"
         >
-          🖨️ Guardar en PDF
+          {t('hero_pdf')}
         </button>
         <button
           type="button"
           onClick={onEditProject}
           className="rounded-full border border-white/[0.08] bg-white/[0.04] px-4 py-2 text-sm font-bold text-foreground transition hover:bg-white/[0.08] sm:w-auto"
         >
-          ✏️ Editar proyecto
+          {t('hero_edit')}
         </button>
         <button
           type="button"
           onClick={onDeleteProject}
           className="rounded-full border border-destructive/30 bg-destructive/10 px-4 py-2 text-sm font-bold text-destructive transition hover:bg-destructive/20 sm:w-auto"
         >
-          🗑️ Eliminar proyecto
+          {t('hero_delete')}
         </button>
       </div>
 
@@ -151,7 +153,7 @@ export function ChallengeHero({ project, pieces, onBack, onPrint, onEditProject,
 
       {isComplete && (
         <div className="mt-4 rounded-2xl border border-[hsl(var(--challenge-blue))]/25 bg-gradient-to-r from-[hsl(var(--challenge-pink))]/10 via-[hsl(var(--challenge-blue))]/10 to-[hsl(var(--challenge-green))]/10 px-5 py-4 text-sm font-bold text-foreground">
-          🎉 ¡Meta alcanzada! Has completado las {project.goal} piezas de <em>{project.title}</em>.
+          {t('hero_goal_reached', { goal: project.goal, title: project.title })}
         </div>
       )}
     </section>
