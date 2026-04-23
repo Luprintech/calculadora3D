@@ -10,6 +10,8 @@ import fs from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';
 import AdmZip from 'adm-zip';
+import JSZip from 'jszip';
+import { XMLParser } from 'fast-xml-parser';
 
 dotenv.config();
 
@@ -170,6 +172,7 @@ db.exec(`
     remaining_g  REAL NOT NULL DEFAULT 0,
     price        REAL NOT NULL DEFAULT 0,
     notes        TEXT NOT NULL DEFAULT '',
+    shop_url     TEXT,
     status       TEXT NOT NULL DEFAULT 'active',
     created_at   TEXT DEFAULT (datetime('now')),
     updated_at   TEXT DEFAULT (datetime('now'))
@@ -180,6 +183,28 @@ db.exec(`
     type    TEXT NOT NULL CHECK(type IN ('brand', 'material')),
     value   TEXT NOT NULL,
     UNIQUE(user_id, type, value)
+  );
+  CREATE TABLE IF NOT EXISTS consumos (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    bobina_id   TEXT NOT NULL REFERENCES filament_inventory(id) ON DELETE CASCADE,
+    proyecto_id TEXT NOT NULL,
+    gramos      REAL NOT NULL,
+    fecha       TEXT DEFAULT (datetime('now'))
+  );
+  CREATE TABLE IF NOT EXISTS filamentos_comunidad (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    codigo           TEXT NOT NULL,
+    marca            TEXT,
+    nombre           TEXT,
+    color            TEXT,
+    color_hex        TEXT,
+    material         TEXT,
+    diametro         REAL,
+    peso             REAL,
+    temp_min         INTEGER,
+    temp_max         INTEGER,
+    fecha_aportacion TEXT DEFAULT (datetime('now')),
+    usuario_id       TEXT REFERENCES users(id) ON DELETE SET NULL
   );
 `);
 
@@ -229,6 +254,9 @@ if (inventoryColNames.size > 0) {
   }
   if (!inventoryColNames.has('notes')) {
     db.exec("ALTER TABLE filament_inventory ADD COLUMN notes TEXT NOT NULL DEFAULT ''");
+  }
+  if (!inventoryColNames.has('shop_url')) {
+    db.exec("ALTER TABLE filament_inventory ADD COLUMN shop_url TEXT");
   }
 }
 
@@ -517,11 +545,44 @@ app.post('/api/projects', requireAuth, (req, res) => {
   const data = req.body;
   const id = crypto.randomUUID();
 
-  db.prepare(
-    'INSERT INTO projects (id, user_id, job_name, data) VALUES (?, ?, ?, ?)'
-  ).run(id, user.id, data.jobName || 'Sin nombre', JSON.stringify(data));
+  // spoolDeductions: Array<{ spoolId: string; grams: number }>
+  const deductions: Array<{ spoolId: string; grams: number }> = Array.isArray(data.spoolDeductions) ? data.spoolDeductions : [];
+  const warnings: string[] = [];
 
-  res.json({ id });
+  // Validate deductions before inserting
+  for (const d of deductions) {
+    if (!d.spoolId || typeof d.grams !== 'number' || d.grams <= 0) continue;
+    const spool = db.prepare('SELECT id, remaining_g, brand, color FROM filament_inventory WHERE id = ? AND user_id = ?')
+      .get(d.spoolId, user.id) as { id: string; remaining_g: number; brand: string; color: string } | undefined;
+    if (!spool) continue;
+    if (d.grams > spool.remaining_g) {
+      warnings.push(`La bobina "${spool.brand} ${spool.color}" tiene ${spool.remaining_g.toFixed(1)} g restantes pero se intenta descontar ${d.grams.toFixed(1)} g.`);
+    }
+  }
+
+  const saveProject = db.transaction(() => {
+    db.prepare(
+      'INSERT INTO projects (id, user_id, job_name, data) VALUES (?, ?, ?, ?)'
+    ).run(id, user.id, data.jobName || 'Sin nombre', JSON.stringify(data));
+
+    for (const d of deductions) {
+      if (!d.spoolId || typeof d.grams !== 'number' || d.grams <= 0) continue;
+      const spool = db.prepare('SELECT id, remaining_g FROM filament_inventory WHERE id = ? AND user_id = ?')
+        .get(d.spoolId, user.id) as { id: string; remaining_g: number } | undefined;
+      if (!spool) continue;
+
+      const newRemaining = Math.max(0, spool.remaining_g - d.grams);
+      db.prepare('UPDATE filament_inventory SET remaining_g = ?, updated_at = datetime(\'now\') WHERE id = ?')
+        .run(newRemaining, d.spoolId);
+
+      db.prepare('INSERT INTO consumos (bobina_id, proyecto_id, gramos) VALUES (?, ?, ?)')
+        .run(d.spoolId, id, d.grams);
+    }
+  });
+
+  saveProject();
+
+  res.json({ id, warnings: warnings.length > 0 ? warnings : undefined });
 });
 
 app.put('/api/projects/:id', requireAuth, (req, res) => {
@@ -908,6 +969,7 @@ interface DbSpool {
   remaining_g: number;
   price: number;
   notes: string;
+  shop_url: string | null;
   status: string;
   created_at: string;
   updated_at: string;
@@ -924,6 +986,7 @@ function mapSpool(r: DbSpool) {
     remainingG: r.remaining_g,
     price: r.price,
     notes: r.notes,
+    shopUrl: r.shop_url ?? null,
     status: r.status as 'active' | 'finished',
     createdAt: r.created_at,
     updatedAt: r.updated_at,
@@ -973,14 +1036,14 @@ app.post('/api/inventory/spools', requireAuth, (req, res) => {
   const err = validateSpoolBody(req.body);
   if (err) { res.status(400).json({ error: err }); return; }
 
-  const { brand, material, color, colorHex = '#cccccc', totalGrams, remainingG, price, notes = '' } = req.body;
+  const { brand, material, color, colorHex = '#cccccc', totalGrams, remainingG, price, notes = '', shopUrl = null } = req.body;
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
   db.prepare(
     `INSERT INTO filament_inventory
-       (id, user_id, brand, material, color, color_hex, total_grams, remaining_g, price, notes, status, created_at, updated_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,'active',?,?)`
-  ).run(id, user.id, brand.trim(), material.trim(), color.trim(), colorHex, Number(totalGrams), Number(remainingG), Number(price), notes, now, now);
+       (id, user_id, brand, material, color, color_hex, total_grams, remaining_g, price, notes, shop_url, status, created_at, updated_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,'active',?,?)`
+  ).run(id, user.id, brand.trim(), material.trim(), color.trim(), colorHex, Number(totalGrams), Number(remainingG), Number(price), notes, shopUrl || null, now, now);
   saveCustomSpoolOptions(user.id, brand, material);
   const spool = db.prepare('SELECT * FROM filament_inventory WHERE id=?').get(id) as DbSpool;
   res.json(mapSpool(spool));
@@ -992,13 +1055,13 @@ app.put('/api/inventory/spools/:id', requireAuth, (req, res) => {
   const err = validateSpoolBody(req.body);
   if (err) { res.status(400).json({ error: err }); return; }
 
-  const { brand, material, color, colorHex = '#cccccc', totalGrams, remainingG, price, notes = '' } = req.body;
+  const { brand, material, color, colorHex = '#cccccc', totalGrams, remainingG, price, notes = '', shopUrl = null } = req.body;
   const now = new Date().toISOString();
   const result = db.prepare(
     `UPDATE filament_inventory
-     SET brand=?, material=?, color=?, color_hex=?, total_grams=?, remaining_g=?, price=?, notes=?, updated_at=?
+     SET brand=?, material=?, color=?, color_hex=?, total_grams=?, remaining_g=?, price=?, notes=?, shop_url=?, updated_at=?
      WHERE id=? AND user_id=?`
-  ).run(brand.trim(), material.trim(), color.trim(), colorHex, Number(totalGrams), Number(remainingG), Number(price), notes, now, req.params.id, user.id);
+  ).run(brand.trim(), material.trim(), color.trim(), colorHex, Number(totalGrams), Number(remainingG), Number(price), notes, shopUrl || null, now, req.params.id, user.id);
   if (result.changes === 0) { res.status(404).json({ error: 'Spool not found.' }); return; }
   saveCustomSpoolOptions(user.id, brand, material);
   const spool = db.prepare('SELECT * FROM filament_inventory WHERE id=?').get(req.params.id) as DbSpool;
@@ -1568,10 +1631,418 @@ app.get('/api/stats', requireAuth, (req, res) => {
   });
 });
 
+// ── Analyze 3MF ──────────────────────────────────────────────────────────────
+app.post('/api/analyze-3mf', upload.single('file'), async (req, res) => {
+  if (!req.file) {
+    res.status(400).json({ error: 'No se ha proporcionado ningún archivo.' });
+    return;
+  }
+
+  try {
+    const zip = await JSZip.loadAsync(req.file.buffer);
+
+    const xmlParser = new XMLParser({
+      ignoreAttributes: false,
+      attributeNamePrefix: '@_',
+      textNodeName: '#text',
+      parseAttributeValue: false,   // keep all attribute values as strings
+      trimValues: true,
+    });
+
+    let projectName = req.file.originalname.replace(/\.3mf$/i, '') || 'Proyecto 3MF';
+
+    interface PlateResult {
+      plateNumber: number;
+      name: string;
+      filamentColor: string;
+      filamentType: string;
+      weightGrams: number | null;
+      printTimeMinutes: number | null;
+    }
+
+    let plates: PlateResult[] = [];
+
+    // ── 1. Try Bambu slice_info.config ─────────────────────────────────────────
+    const sliceInfoFile = zip.file('Metadata/slice_info.config') ?? zip.file('metadata/slice_info.config');
+
+    console.log(`[analyze-3mf] ZIP files: ${Object.keys(zip.files).join(', ')}`);
+    console.log(`[analyze-3mf] slice_info.config found: ${!!sliceInfoFile}`);
+
+    if (sliceInfoFile) {
+      try {
+        const sliceInfoText = await sliceInfoFile.async('text');
+        const parsed = xmlParser.parse(sliceInfoText) as Record<string, unknown>;
+        const config = parsed?.config as Record<string, unknown> | undefined;
+
+        if (!config) {
+          console.warn(`[analyze-3mf] slice_info.config parsed but no root <config> element. Root keys: [${Object.keys(parsed || {}).join(', ')}]`);
+        }
+
+        if (config) {
+          const rawPlates = config.plate;
+          const plateDefs: Record<string, unknown>[] = Array.isArray(rawPlates)
+            ? rawPlates
+            : rawPlates ? [rawPlates as Record<string, unknown>] : [];
+
+          for (let i = 0; i < plateDefs.length; i++) {
+            const plate = plateDefs[i] as Record<string, unknown>;
+
+            const metaMap: Record<string, string> = {};
+            const rawMetas = plate.metadata;
+            const metas: Record<string, unknown>[] = Array.isArray(rawMetas)
+              ? rawMetas
+              : rawMetas ? [rawMetas as Record<string, unknown>] : [];
+            for (const m of metas) {
+              const mr = m as Record<string, string>;
+              if (mr['@_key']) metaMap[mr['@_key']] = String(mr['@_value'] ?? '');
+            }
+
+            const rawFilaments = plate.filament;
+            const filaments: Record<string, unknown>[] = Array.isArray(rawFilaments)
+              ? rawFilaments
+              : rawFilaments ? [rawFilaments as Record<string, unknown>] : [];
+
+            let filamentColor = '';
+            let filamentType = '';
+
+            if (filaments.length > 0) {
+              const fil = filaments[0] as Record<string, unknown>;
+
+              // ── Priority 1: direct XML attributes (Bambu/OrcaSlicer format)
+              // <filament type="PLA" color="FFFFFF" used_g="5.67" tray_color="FFFFFFFF" .../>
+              const attrColor     = String(fil['@_color']      ?? '').replace(/^#/, '');
+              const attrTrayColor = String(fil['@_tray_color'] ?? '').replace(/^#/, '');
+              const attrType      = String(fil['@_type']       ?? '');
+              if (attrColor)     filamentColor = attrColor;
+              else if (attrTrayColor) filamentColor = attrTrayColor;
+              if (attrType)      filamentType  = attrType;
+
+              // ── Priority 2: nested <metadata key="..."> elements (other slicers)
+              if (!filamentColor || !filamentType) {
+                const rawFM = fil.metadata;
+                const filMetaArr: Record<string, unknown>[] = Array.isArray(rawFM)
+                  ? rawFM
+                  : rawFM ? [rawFM as Record<string, unknown>] : [];
+                const filMeta: Record<string, string> = {};
+                for (const m of filMetaArr) {
+                  const mr = m as Record<string, string>;
+                  if (mr['@_key']) filMeta[mr['@_key']] = String(mr['@_value'] ?? '');
+                }
+                if (!filamentColor) filamentColor = filMeta['color'] || filMeta['filament_colour'] || '';
+                if (!filamentType)  filamentType  = filMeta['type']  || filMeta['filament_type']  || '';
+              }
+            }
+
+            // ── Priority 3: plate-level metadata fallbacks (some Bambu/OrcaSlicer versions
+            //    store colour/type in plate metadata instead of / in addition to <filament>)
+            if (!filamentColor) {
+              // filament_colors may be semicolon-separated for multi-material; take first value
+              const rawColors =
+                metaMap['filament_colors'] ||
+                metaMap['filament_colour'] ||
+                metaMap['filament_color']  ||
+                metaMap['extruder_colour'] ||
+                '';
+              filamentColor = rawColors.split(/[;,]/)[0].replace(/^#/, '').trim();
+            }
+            if (!filamentType) {
+              const rawType =
+                metaMap['filament_type']     ||
+                metaMap['filament_material'] ||
+                metaMap['type']              ||
+                metaMap['material']          ||
+                '';
+              filamentType = rawType.split(/[;,]/)[0].trim();
+            }
+
+            console.log(`[analyze-3mf] Plate ${i + 1}: color="${filamentColor}" type="${filamentType}" weight="${metaMap['filament_weight'] || metaMap['used_g'] || metaMap['weight'] || '?'}" time="${metaMap['print_time'] || metaMap['prediction'] || metaMap['print_seconds'] || '?'}" | metaKeys=[${Object.keys(metaMap).join(',')}]`);
+
+            // ── Weight ────────────────────────────────────────────────────
+            // Try plate-level metadata keys first, then sum filament used_g attributes
+            const weightStr = metaMap['filament_weight'] || metaMap['used_g'] || metaMap['weight'] || '';
+            let weightGrams: number | null = weightStr ? (parseFloat(weightStr) || null) : null;
+
+            if (weightGrams === null && filaments.length > 0) {
+              // Fall back: sum @_used_g direct attributes across all filaments
+              const sumFromFilaments = filaments.reduce((acc, f) => {
+                const v = parseFloat(String((f as Record<string, unknown>)['@_used_g'] ?? ''));
+                return acc + (isNaN(v) ? 0 : v);
+              }, 0);
+              if (sumFromFilaments > 0) weightGrams = sumFromFilaments;
+            }
+
+            // ── Time ──────────────────────────────────────────────────────
+            // prediction / print_time is stored in seconds
+            // Some slicers also store it as "HH:MM:SS" → convert
+            const timeStr = metaMap['print_time'] || metaMap['prediction'] || metaMap['print_seconds'] || '';
+            let printTimeMinutes: number | null = null;
+            if (timeStr) {
+              if (/^\d+:\d+:\d+$/.test(timeStr)) {
+                // HH:MM:SS format
+                const [hh, mm, ss] = timeStr.split(':').map(Number);
+                const totalSec = (hh * 3600) + (mm * 60) + (ss || 0);
+                if (totalSec > 0) printTimeMinutes = Math.round(totalSec / 60);
+              } else {
+                const rawTime = parseInt(timeStr, 10);
+                if (!isNaN(rawTime) && rawTime > 0) printTimeMinutes = Math.round(rawTime / 60);
+              }
+            }
+
+            const plateNum = parseInt(metaMap['index'] || metaMap['plater_id'] || String(i + 1), 10) || i + 1;
+
+            plates.push({
+              plateNumber: plateNum,
+              name: metaMap['plate_name'] || `Placa ${plateNum}`,
+              filamentColor,
+              filamentType,
+              weightGrams,
+              printTimeMinutes,
+            });
+          }
+        }
+      } catch (parseErr) {
+        console.warn('[analyze-3mf] Error parsing slice_info.config:', parseErr);
+      }
+    }
+
+    // ── 2. Fallback: parse 3D/3dmodel.model ───────────────────────────────────
+    if (plates.length === 0) {
+      const modelFile = zip.file('3D/3dmodel.model') ?? zip.file('3d/3dmodel.model');
+      if (modelFile) {
+        try {
+          const modelText = await modelFile.async('text');
+          const parsed = xmlParser.parse(modelText) as Record<string, unknown>;
+          const model = parsed?.model as Record<string, unknown> | undefined;
+
+          if (model) {
+            const rawMetas = model.metadata;
+            const metaArr: Record<string, unknown>[] = Array.isArray(rawMetas)
+              ? rawMetas
+              : rawMetas ? [rawMetas as Record<string, unknown>] : [];
+
+            for (const m of metaArr) {
+              const mr = m as Record<string, string>;
+              const key = mr['@_name'] || '';
+              if (['Title', 'title', 'Description', 'Creator'].includes(key)) {
+                const val = mr['@_content'] || mr['#text'] || '';
+                if (val) { projectName = val; break; }
+              }
+            }
+
+            const resources = model.resources as Record<string, unknown> | undefined;
+            const rawObjects = resources?.object;
+            const objects: Record<string, unknown>[] = Array.isArray(rawObjects)
+              ? rawObjects
+              : rawObjects ? [rawObjects as Record<string, unknown>] : [];
+
+            plates = objects.slice(0, 10).map((obj, idx) => {
+              const o = obj as Record<string, string>;
+              return {
+                plateNumber: idx + 1,
+                name: o['@_name'] || `Objeto ${o['@_id'] || idx + 1}`,
+                filamentColor: '',
+                filamentType: '',
+                weightGrams: null,
+                printTimeMinutes: null,
+              };
+            });
+          }
+        } catch (parseErr) {
+          console.warn('[analyze-3mf] Error parsing 3dmodel.model:', parseErr);
+        }
+      }
+
+      if (plates.length === 0) {
+        plates = [{ plateNumber: 1, name: 'Placa 1', filamentColor: '', filamentType: '', weightGrams: null, printTimeMinutes: null }];
+      }
+    }
+
+    const totalWeightGrams = plates.some((p) => p.weightGrams !== null)
+      ? plates.reduce((s, p) => s + (p.weightGrams ?? 0), 0)
+      : null;
+
+    const totalTimeMinutes = plates.some((p) => p.printTimeMinutes !== null)
+      ? plates.reduce((s, p) => s + (p.printTimeMinutes ?? 0), 0)
+      : null;
+
+    res.json({ projectName, plates, totalWeightGrams, totalTimeMinutes });
+  } catch (err) {
+    console.error('[analyze-3mf]', err);
+    res.status(500).json({ error: 'Error al procesar el archivo 3MF.' });
+  }
+});
+
+// ── Helper: parse Bambu QR code ───────────────────────────────────────────────
+interface FilamentData {
+  brand: string | null;
+  name: string | null;
+  color: string | null;
+  colorHex: string | null;
+  material: string | null;
+  diameter: number | null;
+  weightGrams: number | null;
+  printTempMin: number | null;
+  printTempMax: number | null;
+  bedTempMin: number | null;
+  bedTempMax: number | null;
+  price: number | null;
+}
+
+function parseBambuQr(code: string): Partial<FilamentData> | null {
+  try {
+    let obj: Record<string, unknown> | null = null;
+
+    if (code.startsWith('{')) {
+      obj = JSON.parse(code) as Record<string, unknown>;
+    } else if (code.includes('bambulab.com') || code.includes('bambulabs.com')) {
+      const url = new URL(code);
+      const params = Object.fromEntries(url.searchParams.entries());
+      if (params.content) {
+        obj = JSON.parse(decodeURIComponent(params.content)) as Record<string, unknown>;
+      } else {
+        obj = params as Record<string, unknown>;
+      }
+    }
+
+    if (!obj) return null;
+
+    const type = String(obj.type || obj.tpe || obj.filamentType || '');
+    const colorRaw = String(obj.color || obj.clr || obj.filamentColor || '');
+    let colorHex: string | null = null;
+    if (/^[0-9A-Fa-f]{6,8}$/.test(colorRaw)) {
+      colorHex = '#' + colorRaw.substring(0, 6).toUpperCase();
+    }
+
+    const toNum = (v: unknown) => {
+      const n = parseFloat(String(v || ''));
+      return isNaN(n) ? null : n;
+    };
+    const toInt = (v: unknown) => {
+      const n = parseInt(String(v || ''), 10);
+      return isNaN(n) ? null : n;
+    };
+
+    return {
+      brand: String(obj.subBrand || obj.brand || 'Bambu Lab') || null,
+      name: String(obj.trayIdName || obj.name || (type ? `Bambu ${type}` : '')) || null,
+      color: null,
+      colorHex,
+      material: type || null,
+      diameter: toNum(obj.diameter || obj.dia) ?? 1.75,
+      weightGrams: toNum(obj.weight || obj.wgt),
+      printTempMin: toInt(obj.nozzleTemp || obj.minNozzleTemp),
+      printTempMax: toInt(obj.maxNozzleTemp || obj.nozzleTemp),
+      bedTempMin: toInt(obj.bedTemp || obj.minBedTemp),
+      bedTempMax: toInt(obj.maxBedTemp || obj.bedTemp),
+      price: null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+// ── Lookup Filament (barcode / QR) ────────────────────────────────────────────
+app.post('/api/lookup-filament', async (req, res) => {
+  const { code } = req.body as { code?: string };
+  if (!code?.trim()) {
+    res.status(400).json({ error: 'Se requiere un código.' });
+    return;
+  }
+
+  const trimmedCode = code.trim();
+  const emptyData: FilamentData = {
+    brand: null, name: null, color: null, colorHex: null,
+    material: null, diameter: null, weightGrams: null,
+    printTempMin: null, printTempMax: null,
+    bedTempMin: null, bedTempMax: null, price: null,
+  };
+
+  // 1. Check local community DB first
+  const localRow = db
+    .prepare('SELECT * FROM filamentos_comunidad WHERE codigo = ? ORDER BY id DESC LIMIT 1')
+    .get(trimmedCode) as Record<string, unknown> | undefined;
+
+  if (localRow) {
+    res.json({
+      found: true,
+      source: 'opendb' as const,
+      data: {
+        brand: localRow.marca as string | null,
+        name: localRow.nombre as string | null,
+        color: localRow.color as string | null,
+        colorHex: localRow.color_hex as string | null,
+        material: localRow.material as string | null,
+        diameter: localRow.diametro as number | null,
+        weightGrams: localRow.peso as number | null,
+        printTempMin: localRow.temp_min as number | null,
+        printTempMax: localRow.temp_max as number | null,
+        bedTempMin: null,
+        bedTempMax: null,
+        price: null,
+      } satisfies FilamentData,
+    });
+    return;
+  }
+
+  // 2. Try Bambu QR parsing
+  const bambuData = parseBambuQr(trimmedCode);
+  if (bambuData) {
+    res.json({ found: true, source: 'bambu' as const, data: { ...emptyData, ...bambuData } });
+    return;
+  }
+
+  // 3. Not found (Spoolman DB doesn't index by EAN/QR code, users can contribute manually)
+  res.json({ found: false, source: 'manual' as const, data: emptyData });
+});
+
+// ── Community filament DB contribution ───────────────────────────────────────
+app.post('/api/filaments-community', requireAuth, (req, res) => {
+  const user = req.user as DbUser;
+  const { codigo, marca, nombre, color, colorHex, material, diametro, peso, tempMin, tempMax } =
+    req.body as Record<string, unknown>;
+
+  if (!String(codigo || '').trim()) {
+    res.status(400).json({ error: 'El código es obligatorio.' });
+    return;
+  }
+
+  db.prepare(`
+    INSERT INTO filamentos_comunidad (codigo, marca, nombre, color, color_hex, material, diametro, peso, temp_min, temp_max, usuario_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    String(codigo).trim(),
+    marca || null, nombre || null, color || null, colorHex || null,
+    material || null, diametro || null, peso || null,
+    tempMin || null, tempMax || null, user.id,
+  );
+
+  res.json({ success: true });
+});
+
+// ── GET consumos por bobina ────────────────────────────────────────────────────
+app.get('/api/inventory/:spoolId/consumos', requireAuth, (req, res) => {
+  const user = req.user as DbUser;
+  const spool = db
+    .prepare('SELECT id FROM filament_inventory WHERE id = ? AND user_id = ?')
+    .get(req.params.spoolId, user.id);
+  if (!spool) { res.status(404).json({ error: 'Bobina no encontrada.' }); return; }
+
+  const rows = db.prepare(`
+    SELECT c.id, c.bobina_id, c.proyecto_id, c.gramos, c.fecha,
+           p.job_name
+    FROM consumos c
+    LEFT JOIN projects p ON p.id = c.proyecto_id
+    WHERE c.bobina_id = ?
+    ORDER BY c.fecha DESC
+    LIMIT 50
+  `).all(req.params.spoolId) as Array<{ id: number; bobina_id: string; proyecto_id: string; gramos: number; fecha: string; job_name: string | null }>;
+
+  res.json(rows);
+});
+
 // ── Producción ────────────────────────────────────────────────────────────────
 if (process.env.NODE_ENV === 'production') {
   const distPath = path.resolve(__dirname, '../../frontend/dist');
-  app.use(express.static(distPath));
   app.get('*', (_req, res) => res.sendFile(path.join(distPath, 'index.html')));
 }
 

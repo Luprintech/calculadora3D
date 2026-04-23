@@ -60,6 +60,7 @@ const spoolSchema = z
     remainingG: z.coerce.number().min(0, 'Must be >= 0'),
     price: z.coerce.number().min(0, 'Must be >= 0'),
     notes: z.string().default(''),
+    shopUrl: z.string().url('Invalid URL').optional().or(z.literal('')),
   })
   .refine((d) => d.remainingG <= d.totalGrams, {
     message: 'Remaining cannot exceed total',
@@ -87,11 +88,12 @@ interface SpoolFormProps {
   editingSpool?: Spool | null;
   customBrands?: string[];
   customMaterials?: string[];
+  prefill?: Partial<SpoolFormValues>;
 }
 
 // ── Component ──────────────────────────────────────────────────────────────────
 
-export function SpoolForm({ open, onClose, onSubmit, editingSpool, customBrands = [], customMaterials = [] }: SpoolFormProps) {
+export function SpoolForm({ open, onClose, onSubmit, editingSpool, customBrands = [], customMaterials = [], prefill }: SpoolFormProps) {
   const { t } = useTranslation();
   const isEditing = Boolean(editingSpool);
 
@@ -133,7 +135,11 @@ export function SpoolForm({ open, onClose, onSubmit, editingSpool, customBrands 
   // Sincroniza el estado del select cuando se abre o cambia el spool a editar
   React.useEffect(() => {
     if (open) {
-      const defaults = buildDefaults(editingSpool);
+      const base = buildDefaults(editingSpool);
+      // Merge prefill data when adding a new spool (not editing)
+      const defaults: SpoolFormValues = editingSpool
+        ? base
+        : { ...base, ...prefill };
       reset(defaults);
       setBrandSelectVal(resolveSelectValue(defaults.brand, allKnownBrands));
       setMaterialSelectVal(resolveSelectValue(defaults.material, allKnownMaterials));
@@ -318,6 +324,20 @@ export function SpoolForm({ open, onClose, onSubmit, editingSpool, customBrands 
             <Textarea id="inv-notes" placeholder={t('inventory.notesPlaceholder')} rows={2} {...register('notes')} />
           </div>
 
+          {/* ── URL tienda ────────────────────────────────────────────────── */}
+          <div className="space-y-1.5">
+            <Label htmlFor="inv-shop-url" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+              {t('inventory.shopUrl')}
+            </Label>
+            <Input
+              id="inv-shop-url"
+              type="url"
+              placeholder={t('inventory.shopUrlPlaceholder')}
+              {...register('shopUrl')}
+            />
+            {errors.shopUrl && <p className="text-xs text-destructive">{errors.shopUrl.message}</p>}
+          </div>
+
           <div className="flex justify-end gap-2 pt-1">
             <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
               {t('cancel')}
@@ -345,6 +365,7 @@ function buildDefaults(spool?: Spool | null): SpoolFormValues {
       remainingG: spool.remainingG,
       price: spool.price,
       notes: spool.notes,
+      shopUrl: spool.shopUrl ?? '',
     };
   }
   return {
@@ -356,5 +377,6 @@ function buildDefaults(spool?: Spool | null): SpoolFormValues {
     remainingG: 1000,
     price: 0,
     notes: '',
+    shopUrl: '',
   };
 }

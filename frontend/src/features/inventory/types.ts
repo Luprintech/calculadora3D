@@ -12,6 +12,7 @@ export interface Spool {
   remainingG: number;
   price: number;
   notes: string;
+  shopUrl: string | null;
   status: SpoolStatus;
   createdAt: string;
   updatedAt: string;
@@ -26,6 +27,7 @@ export interface SpoolInput {
   remainingG: number;
   price: number;
   notes: string;
+  shopUrl?: string;
 }
 
 // ── Value helpers ──────────────────────────────────────────────────────────────

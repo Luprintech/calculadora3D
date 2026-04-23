@@ -4,13 +4,15 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { cn, generateId } from '@/lib/utils';
-import { parseTimeBlock, formatCost } from './filament-storage';
+import { parseTimeBlock, secsToString, formatCost } from './filament-storage';
 import { getTrackerSuccessMessage } from './tracker-messages';
 import type { EditingState, FilamentPiece, FilamentProject, PieceFilamentInput } from './filament-types';
 import type { PieceInput } from './use-filament-storage';
 import { useTranslation } from 'react-i18next';
 import type { Spool } from '@/features/inventory/types';
-import { Plus, Trash2, X } from 'lucide-react';
+import { Plus, Trash2, X, UploadCloud, Loader2, Box } from 'lucide-react';
+import { analyzeGcodeFile } from '@/features/calculator/api/analyze-gcode';
+import { Import3MFModal, type Import3MFResult } from '@/components/import-3mf-modal';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -324,6 +326,13 @@ export function ChallengeForm({
   const [filamentError, setFilamentError]         = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // ── G-code / 3MF auto-fill ─────────────────────────────────────────────────
+  const gcodeFileInputRef = useRef<HTMLInputElement>(null);
+  const [isAnalyzing, setIsAnalyzing]     = useState(false);
+  const [import3mfOpen, setImport3mfOpen] = useState(false);
+  type FeedbackKind = 'idle' | 'success' | 'partial' | 'error';
+  const [gcodeStatus, setGcodeStatus] = useState<{ kind: FeedbackKind; message?: string }>({ kind: 'idle' });
+
   const timeText = watch('timeText') ?? '';
   const previewTime = parseTimeBlock(timeText);
 
@@ -349,7 +358,74 @@ export function ChallengeForm({
     setMilestoneUnlocked(null);
     setFilamentRows([emptyRow()]);
     setFilamentError('');
+    setGcodeStatus({ kind: 'idle' });
     if (fileInputRef.current) fileInputRef.current.value = '';
+  }
+
+  // ── G-code analysis ────────────────────────────────────────────────────────
+
+  async function handleGcodeUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+    setIsAnalyzing(true);
+    setGcodeStatus({ kind: 'idle' });
+    try {
+      const res = await analyzeGcodeFile(file);
+      if (res.error) throw new Error(res.error);
+      const totalSecs   = res.data?.printingTimeSeconds ?? 0;
+      const weightGrams = res.data?.filamentWeightGrams  ?? 0;
+
+      if (totalSecs > 0) {
+        setValue('timeText', secsToString(totalSecs));
+      }
+      if (weightGrams > 0) {
+        setFilamentRows((prev) =>
+          prev.map((r, i) => i === 0 ? { ...r, grams: String(Math.round(weightGrams * 10) / 10) } : r)
+        );
+      }
+
+      const filledTime  = totalSecs   > 0;
+      const filledGrams = weightGrams > 0;
+      if (filledTime && filledGrams) {
+        const h = Math.floor(totalSecs / 3600);
+        const m = Math.floor((totalSecs % 3600) / 60);
+        setGcodeStatus({ kind: 'success', message: t('tracker.gcode_ok', { h, m, g: weightGrams.toFixed(1) }) });
+      } else if (filledTime || filledGrams) {
+        setGcodeStatus({ kind: 'partial', message: t('tracker.gcode_partial') });
+      } else {
+        setGcodeStatus({ kind: 'partial', message: t('tracker.gcode_empty') });
+      }
+    } catch (err) {
+      setGcodeStatus({ kind: 'error', message: err instanceof Error ? err.message : t('tracker.gcode_error') });
+    } finally {
+      setIsAnalyzing(false);
+    }
+  }
+
+  // ── 3MF import ─────────────────────────────────────────────────────────────
+
+  function handle3MFConfirm(result: Import3MFResult) {
+    // Fill time
+    const totalMin = result.printTimeMinutes;
+    const h = Math.floor(totalMin / 60);
+    const m = totalMin % 60;
+    setValue('timeText', `${h}h ${m}m 0s`);
+
+    // Map filament rows
+    if (result.filaments.length > 0) {
+      setFilamentRows(result.filaments.map((f) => ({
+        key:       generateId(),
+        mode:      f.mode as 'spool' | 'manual',
+        spoolId:   f.spoolId || '',
+        colorHex:  f.colorHex,
+        colorName: f.colorName,
+        brand:     f.brand,
+        material:  f.filamentType,
+        grams:     String(f.grams),
+      })));
+    }
+    setGcodeStatus({ kind: 'idle' });
   }
 
   // ── Populate when editing ──────────────────────────────────────────────────
@@ -523,12 +599,62 @@ export function ChallengeForm({
           </div>
         </div>
 
+        {/* ── Auto-fill from G-code / 3MF ───────────────────────────────────── */}
+        <div className="rounded-[16px] border border-white/[0.08] bg-white/[0.02] p-3 space-y-2.5">
+          <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+            {t('cf_gcode_title')}
+          </Label>
+          <div className="flex flex-wrap gap-2">
+            <input
+              type="file"
+              ref={gcodeFileInputRef}
+              accept=".gcode"
+              className="hidden"
+              onChange={handleGcodeUpload}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="rounded-full text-xs font-bold"
+              onClick={() => gcodeFileInputRef.current?.click()}
+              disabled={isAnalyzing}
+            >
+              {isAnalyzing
+                ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                : <UploadCloud className="mr-1.5 h-3.5 w-3.5" />}
+              {isAnalyzing ? t('cf_gcode_analyzing') : t('cf_gcode_upload')}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="rounded-full text-xs font-bold"
+              onClick={() => setImport3mfOpen(true)}
+              disabled={isAnalyzing}
+            >
+              <Box className="mr-1.5 h-3.5 w-3.5" />
+              {t('tmf_btn')}
+            </Button>
+          </div>
+          {gcodeStatus.kind !== 'idle' && (
+            <p className={`text-xs font-medium rounded-lg border px-2.5 py-2 ${
+              gcodeStatus.kind === 'success'
+                ? 'border-green-500/30 bg-green-500/10 text-green-700 dark:text-green-300'
+                : gcodeStatus.kind === 'partial'
+                  ? 'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300'
+                  : 'border-destructive/40 bg-destructive/10 text-destructive'
+            }`}>
+              {gcodeStatus.message}
+            </p>
+          )}
+        </div>
+
         {/* Time */}
         <div className="space-y-1.5">
           <Label htmlFor="ch-time" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
             {t('form_time')}
-          </Label>
-          <Input id="ch-time" placeholder={t('form_time_placeholder')} className="challenge-input" {...register('timeText')} />
+          </Label>          <Input id="ch-time" placeholder={t('form_time_placeholder')} className="challenge-input" {...register('timeText')} />
           <p className="text-[0.8rem] text-muted-foreground">{t('form_time_hint')}</p>
           {errors.timeText && <p className="text-xs font-semibold text-destructive">{errors.timeText.message}</p>}
         </div>
@@ -663,6 +789,13 @@ export function ChallengeForm({
       </form>
 
       <p className="mt-4 text-[0.82rem] leading-relaxed text-muted-foreground">{t('form_cloud_hint')}</p>
+
+      <Import3MFModal
+        open={import3mfOpen}
+        onClose={() => setImport3mfOpen(false)}
+        onConfirm={handle3MFConfirm}
+        spools={activeSpools}
+      />
     </section>
   );
 }

@@ -1,6 +1,6 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { Edit2, Trash2, MinusCircle, CheckCircle } from 'lucide-react';
+import { Edit2, Trash2, MinusCircle, CheckCircle, ShoppingCart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { Spool } from '../types';
@@ -185,6 +185,19 @@ export function SpoolCard({ spool, onEdit, onDelete, onDeduct, onFinish }: Spool
             <CheckCircle className="mr-1 h-3.5 w-3.5" />
             {t('inventory.markFinished')}
           </Button>
+          {spool.shopUrl && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 rounded-full px-2.5 text-xs text-primary hover:text-primary"
+              asChild
+            >
+              <a href={spool.shopUrl} target="_blank" rel="noopener noreferrer" title={t('inventory.buyLink')}>
+                <ShoppingCart className="mr-1 h-3.5 w-3.5" />
+                {t('inventory.buyLink')}
+              </a>
+            </Button>
+          )}
           <Button
             size="sm"
             variant="ghost"

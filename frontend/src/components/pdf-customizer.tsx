@@ -94,6 +94,7 @@ export function PdfCustomizer({ open, onOpenChange, projectData }: PdfCustomizer
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Load saved config
   useEffect(() => {
@@ -102,13 +103,20 @@ export function PdfCustomizer({ open, onOpenChange, projectData }: PdfCustomizer
     }
   }, [savedConfig]);
 
-  // Auto-generate preview when config changes
+  // Auto-generate preview when dialog opens or config changes (debounced)
   useEffect(() => {
-    if (open && activeTab === 'preview') {
+    if (!open) return;
+
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    debounceTimerRef.current = setTimeout(() => {
       handleGeneratePreview();
-    }
+    }, 500);
+
+    return () => {
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [config, activeTab, open]);
+  }, [config, open]);
 
   const handleLogoUpload = async (file: File) => {
     if (file.size > 2 * 1024 * 1024) {
@@ -518,7 +526,7 @@ export function PdfCustomizer({ open, onOpenChange, projectData }: PdfCustomizer
                   />
                 ) : (
                   <div className="h-full flex items-center justify-center text-muted-foreground">
-                    <p>Actualiza la vista previa para ver los cambios</p>
+                    <p>Generando vista previa…</p>
                   </div>
                 )}
               </div>

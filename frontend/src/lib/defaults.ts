@@ -1,6 +1,19 @@
 
 import type { FormData } from '@/lib/schema';
 
+export const defaultFilamentRow = {
+  id: '',
+  mode: 'manual' as const,
+  spoolId: '',
+  filamentType: 'PLA',
+  colorHex: '#888888',
+  colorName: '',
+  brand: '',
+  grams: 0,
+  spoolPrice: 15,
+  spoolWeight: 1000,
+};
+
 // We use this object to initialize the form with default values.
 // This decouples the form's initial state from the validation schema,
 // preventing issues where default "empty" values don't pass validation checks
@@ -29,4 +42,5 @@ export const defaultFormValues: FormData = {
   otherCosts: [],
   profitPercentage: 20,
   vatPercentage: 0,
+  filaments: [{ ...defaultFilamentRow }],
 };

@@ -12,10 +12,11 @@ import { formatCost, secsToString } from './filament-storage';
 import type { FilamentProject } from './filament-types';
 import type { ProjectInput } from './use-filament-storage';
 import { useTranslation } from 'react-i18next';
+import { useCurrency } from '@/context/currency-context';
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
-const CURRENCIES = ['EUR', 'USD', 'GBP', 'MXN', 'ARS', 'COP', 'CLP'];
+// (CURRENCIES list removed — now managed globally via CurrencyContext)
 
 // ── Project form (inside dialog) ───────────────────────────────────────────────
 
@@ -37,11 +38,19 @@ interface ProjectFormProps {
 
 export function ProjectForm({ defaultValues, onSubmit, onCancel, submitLabel }: ProjectFormProps) {
   const { t } = useTranslation();
+  const { currency } = useCurrency();
   const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm<ProjectFormValues>({
     defaultValues: defaultValues ?? {
-      title: '', description: '', coverImage: '', goal: '30', pricePerKg: '20.00', currency: 'EUR',
+      title: '', description: '', coverImage: '', goal: '30', pricePerKg: '20.00', currency,
     },
   });
+
+  // Keep hidden currency field in sync with global setting (for new projects)
+  React.useEffect(() => {
+    if (!defaultValues) {
+      setValue('currency', currency);
+    }
+  }, [currency, defaultValues, setValue]);
 
   const coverImage = watch('coverImage');
 
@@ -153,28 +162,16 @@ export function ProjectForm({ defaultValues, onSubmit, onCancel, submitLabel }: 
         />
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-1.5">
-          <Label htmlFor="pm-goal" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-            {t('pm_goal')}
-          </Label>
-          <Input id="pm-goal" type="number" min={1} placeholder="30" {...register('goal')} />
-          <p className="text-[0.78rem] text-muted-foreground">{t('pm_goal_hint')}</p>
-        </div>
-
-        <div className="space-y-1.5">
-          <Label htmlFor="pm-currency" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-            {t('pm_currency')}
-          </Label>
-          <select
-            id="pm-currency"
-            className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
-            {...register('currency')}
-          >
-            {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
-          </select>
-        </div>
+      <div className="space-y-1.5">
+        <Label htmlFor="pm-goal" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+          {t('pm_goal')}
+        </Label>
+        <Input id="pm-goal" type="number" min={1} placeholder="30" {...register('goal')} />
+        <p className="text-[0.78rem] text-muted-foreground">{t('pm_goal_hint')}</p>
       </div>
+
+      {/* Hidden currency field — value comes from global CurrencySelector */}
+      <input type="hidden" {...register('currency')} />
 
       <div className="space-y-1.5">
         <Label htmlFor="pm-price" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">

@@ -1,7 +1,8 @@
 {
-  "name": "calculadora-3d",
+  "name": "filamentos",
   "version": "0.1.0",
   "private": true,
+  "description": "FilamentOS — El sistema operativo de tus impresiones 3D",
   "workspaces": ["frontend", "backend"],
   "scripts": {
     "dev": "concurrently \"npm run dev -w frontend\" \"npm run dev -w backend\"",

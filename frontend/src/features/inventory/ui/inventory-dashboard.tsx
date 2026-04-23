@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Package, Plus, AlertTriangle } from 'lucide-react';
+import { Package, Plus, AlertTriangle, ScanLine } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useInventory } from '../api/use-inventory';
 import { SpoolCard } from './spool-card';
 import { SpoolForm } from './spool-form';
 import { DeductModal } from './deduct-modal';
+import { BarcodeScannerModal, type ScannerFillData } from './barcode-scanner-modal';
 import type { Spool, SpoolInput } from '../types';
 import { getTotalInventoryValue, getAverageCostPerKg, isLowStock } from '../types';
 
@@ -24,6 +25,8 @@ export function InventoryDashboard({ userId, authLoading }: InventoryDashboardPr
   const [editingSpool, setEditingSpool] = useState<Spool | null>(null);
   const [deductTarget, setDeductTarget] = useState<Spool | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [scanPrefill, setScanPrefill] = useState<Partial<ScannerFillData> | null>(null);
 
   // ── Derived metrics ──────────────────────────────────────────────────────────
   const totalValue = getTotalInventoryValue(spools);
@@ -35,6 +38,14 @@ export function InventoryDashboard({ userId, authLoading }: InventoryDashboardPr
 
   function handleOpenAdd() {
     setEditingSpool(null);
+    setScanPrefill(null);
+    setFormOpen(true);
+  }
+
+  function handleScanFill(data: ScannerFillData) {
+    setScannerOpen(false);
+    setEditingSpool(null);
+    setScanPrefill(data);
     setFormOpen(true);
   }
 
@@ -87,10 +98,16 @@ export function InventoryDashboard({ userId, authLoading }: InventoryDashboardPr
           <h2 className="text-xl font-black text-foreground sm:text-2xl">{t('inventory.title')}</h2>
           <p className="text-sm text-muted-foreground">{t('inventory.subtitle')}</p>
         </div>
-        <Button onClick={handleOpenAdd} className="rounded-full font-bold">
-          <Plus className="mr-1.5 h-4 w-4" />
-          {t('inventory.addSpool')}
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setScannerOpen(true)} className="rounded-full font-bold">
+            <ScanLine className="mr-1.5 h-4 w-4" />
+            <span className="hidden sm:inline">{t('scan_btn')}</span>
+          </Button>
+          <Button onClick={handleOpenAdd} className="rounded-full font-bold">
+            <Plus className="mr-1.5 h-4 w-4" />
+            {t('inventory.addSpool')}
+          </Button>
+        </div>
       </div>
 
       {/* Metrics */}
@@ -182,11 +199,12 @@ export function InventoryDashboard({ userId, authLoading }: InventoryDashboardPr
       {/* Add/Edit Form modal */}
       <SpoolForm
         open={formOpen}
-        onClose={() => setFormOpen(false)}
+        onClose={() => { setFormOpen(false); setScanPrefill(null); }}
         onSubmit={handleFormSubmit}
         editingSpool={editingSpool}
         customBrands={customBrands}
         customMaterials={customMaterials}
+        prefill={scanPrefill ?? undefined}
       />
 
       {/* Deduct modal */}
@@ -194,6 +212,13 @@ export function InventoryDashboard({ userId, authLoading }: InventoryDashboardPr
         spool={deductTarget}
         onClose={() => setDeductTarget(null)}
         onDeduct={handleDeduct}
+      />
+
+      {/* Barcode scanner modal */}
+      <BarcodeScannerModal
+        open={scannerOpen}
+        onClose={() => setScannerOpen(false)}
+        onFill={handleScanFill}
       />
     </section>
   );

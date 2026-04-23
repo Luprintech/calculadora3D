@@ -366,7 +366,7 @@ export function generatePdfHtml(
   ` : ''}
   
   <div class="footer" style="margin-top: 10px;">
-    Presupuesto generado con <strong>Calculadora 3D</strong> — ${new Date().toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' })}
+    Presupuesto generado con <strong>FilamentOS</strong> — ${new Date().toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' })}
   </div>
 </body>
 </html>
@@ -684,7 +684,7 @@ export function generateTrackerPdfHtml(
   ` : ''}
   
   <div class="footer" style="margin-top: 10px;">
-    Tracker generado con <strong>Calculadora 3D</strong> — ${new Date().toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' })}
+    Tracker generado con <strong>FilamentOS</strong> — ${new Date().toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' })}
   </div>
 </body>
 </html>

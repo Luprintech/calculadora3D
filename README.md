@@ -1,4 +1,4 @@
-# Calculadora 3D — Luprintech
+# FilamentOS — Luprintech
 
 <p align="center">
   <img src="https://img.shields.io/badge/React-18-61DAFB?style=for-the-badge&logo=react&logoColor=black" alt="React" />
@@ -12,9 +12,16 @@
   <img src="https://img.shields.io/badge/PWA-instalable-5A0FC8?style=for-the-badge&logo=pwa&logoColor=white" alt="PWA" />
 </p>
 
-Herramienta web para calcular el coste real de impresiones 3D. Incluye análisis de archivos G-code con IA, gestión de proyectos por usuario y soporte para múltiples divisas.
+<p align="center">
+  <b>El sistema operativo de tus impresiones 3D</b>
+</p>
 
-## Imagen de la aplicacion
+FilamentOS es una aplicación web completa para gestionar tus impresiones 3D: calcula costes reales, lleva un inventario de bobinas, hace seguimiento de proyectos y genera presupuestos PDF profesionales. Creada y mantenida por Lupe ([@Luprintech](https://www.instagram.com/luprintech/)).
+
+---
+
+## Capturas de pantalla
+
 <p align="center">
   <img src="docs/claro.png" width="700">
 </p>
@@ -23,16 +30,24 @@ Herramienta web para calcular el coste real de impresiones 3D. Incluye análisis
   <img src="docs/oscuro.png" width="700">
 </p>
 
+---
+
 ## Características
 
-- **Cálculo de costes completo** — filamento, electricidad, mano de obra, amortización de máquina y otros gastos
-- **Análisis G-code con IA** — sube un archivo G-code y la IA extrae automáticamente el tiempo de impresión y el peso de filamento
+- **Calculadora de costes** — filamento, electricidad, mano de obra, amortización de máquina y otros gastos, con wizard de 4 pasos
+- **Importación de archivos 3MF** — importa proyectos de Bambu Studio / PrusaSlicer / OrcaSlicer; extrae placas, filamentos, tiempos y pesos
+- **Análisis G-code con IA** — sube un archivo G-code y la IA (Gemini) extrae automáticamente tiempo de impresión y peso de filamento
+- **Inventario de bobinas** — gestiona el stock: marca como activo/agotado, deduce gramos tras cada impresión, historial de consumos
+- **Escáner de código de barras / QR** — escanea la etiqueta de una bobina con la cámara del móvil; busca y rellena datos automáticamente
+- **Tracker de proyectos** — registra piezas, tiempo y material por proyecto; exporta informes en PDF
+- **Estadísticas** — resumen de proyectos, kilómetros impresos, coste total y ahorro estimado
+- **Exportación PDF personalizable** — logo, colores, datos de empresa y secciones configurables
 - **Gestión de proyectos** — guarda, carga y elimina proyectos por cuenta de usuario
 - **Login con Google** — autenticación OAuth 2.0, sin contraseñas
-- **Compartir e imprimir** — exporta el resumen del presupuesto
-- **Instalable como PWA** — instálala en móvil o escritorio como aplicación nativa
+- **Internacionalización** — interfaz disponible en ES, EN, DE, FR, IT y PT
+- **Instalable como PWA** — instálala en móvil o escritorio como app nativa
 - **Tema claro / oscuro** — sigue la preferencia del sistema
-- **Diseño responsive** — funciona en móvil y escritorio
+- **Diseño responsive** — optimizado para móvil y escritorio
 - **Privacidad y cookies** — aviso legal conforme a RGPD y LSSI (UE/España)
 
 ---
@@ -63,8 +78,8 @@ Herramienta web para calcular el coste real de impresiones 3D. Incluye análisis
 
 ```bash
 # 1. Clona el repositorio
-git clone https://github.com/luprintech/calculadora-3D.git
-cd calculadora-3D
+git clone https://github.com/Luprintech/calculadora3D.git
+cd calculadora3D
 
 # 2. Instala todas las dependencias (frontend + backend)
 npm install
@@ -146,7 +161,7 @@ La base de datos SQLite (`backend/data.db`) se crea automáticamente al arrancar
 ## Estructura del proyecto
 
 ```
-calculadora-3D/
+calculadora3D/
 ├── package.json               # Raíz: npm workspaces + scripts
 ├── frontend/                  # Todo el frontend (React + Vite)
 │   ├── package.json
@@ -155,57 +170,128 @@ calculadora-3D/
 │   ├── tailwind.config.ts
 │   ├── index.html
 │   ├── public/
-│   │   └── Logo.svg
+│   │   ├── manifest.json      # Manifiesto PWA
+│   │   └── sw.js              # Service worker (PWA)
 │   └── src/
 │       ├── components/
-│       │   ├── ui/                    # Componentes shadcn/ui
-│       │   ├── calculator-form.tsx
-│       │   ├── login-page.tsx
-│       │   ├── print-summary.tsx
-│       │   ├── saved-projects-dialog.tsx
-│       │   ├── cookie-banner.tsx      # Banner aviso de cookies
-│       │   └── privacy-policy-modal.tsx  # Política de privacidad
+│       │   ├── ui/                          # Componentes shadcn/ui
+│       │   ├── calculator-form.tsx          # Formulario calculadora (wizard 4 pasos)
+│       │   ├── import-3mf-modal.tsx         # Modal de importación 3MF
+│       │   ├── pdf-customizer.tsx           # Personalización de PDF
+│       │   ├── about-modal.tsx              # Modal "Acerca de FilamentOS"
+│       │   ├── buy-me-coffee-button.tsx     # Botón Buy Me a Coffee reutilizable
+│       │   ├── cookie-banner.tsx            # Banner aviso de cookies
+│       │   └── privacy-policy-modal.tsx     # Política de privacidad
+│       ├── features/
+│       │   ├── calculator/                  # Dominio calculadora
+│       │   │   ├── api/                     # React Query hooks
+│       │   │   ├── domain/                  # Lógica de cálculo de costes
+│       │   │   └── model/                   # Acciones del formulario
+│       │   ├── inventory/                   # Inventario de bobinas
+│       │   │   ├── api/                     # React Query hooks
+│       │   │   ├── types.ts
+│       │   │   └── ui/
+│       │   │       ├── inventory-dashboard.tsx
+│       │   │       ├── spool-form.tsx
+│       │   │       └── barcode-scanner-modal.tsx
+│       │   ├── projects/                    # Proyectos guardados
+│       │   └── tracker/                     # Tracker de piezas
+│       ├── i18n/
+│       │   └── locales/                     # Traducciones ES/EN/DE/FR/IT/PT
 │       ├── context/
-│       │   └── auth-context.tsx       # Contexto de autenticación
+│       │   └── auth-context.tsx
 │       ├── hooks/
-│       │   ├── use-cookie-consent.ts  # Gestión consentimiento cookies
-│       │   └── use-pwa-install.ts     # Instalación PWA
 │       ├── lib/
-│       │   ├── schema.ts              # Validación Zod
-│       │   ├── defaults.ts            # Valores por defecto
-│       │   ├── projects.ts            # CRUD proyectos (API REST)
+│       │   ├── schema.ts                    # Validación Zod
+│       │   ├── defaults.ts                  # Valores por defecto del formulario
 │       │   └── utils.ts
 │       ├── App.tsx
-│       ├── main.tsx                   # Registro service worker PWA
-│       └── index.css
-│   public/
-│       ├── Logo.svg
-│       ├── manifest.json              # Manifiesto PWA
-│       └── sw.js                      # Service worker (PWA)
+│       └── main.tsx
 └── backend/                   # Todo el backend (Express)
     ├── package.json
     ├── tsconfig.json
     ├── .env                   # Variables de entorno (no en git)
     ├── .env.example
-    ├── data.db                # Base de datos SQLite (generada)
     └── src/
-        └── index.ts           # Express: OAuth, proyectos, GCode API
+        ├── index.ts           # Express: OAuth, proyectos, inventario, análisis IA
+        └── pdf-generator.ts   # Generación de PDFs (presupuesto y tracker)
 ```
 
 ---
 
 ## API del servidor
 
-| Método | Ruta | Descripción |
-|---|---|---|
-| GET | `/api/auth/google` | Inicia el flujo OAuth con Google |
-| GET | `/api/auth/google/callback` | Callback OAuth (redirige Google aquí) |
-| GET | `/api/auth/logout` | Cierra la sesión |
-| GET | `/api/auth/user` | Devuelve el usuario autenticado |
-| GET | `/api/projects` | Lista los proyectos del usuario |
-| POST | `/api/projects` | Guarda un nuevo proyecto |
-| DELETE | `/api/projects/:id` | Elimina un proyecto |
-| POST | `/api/analyze-gcode` | Analiza un archivo G-code con IA |
+### Autenticación
+
+| Método | Ruta | Auth | Descripción |
+|---|---|---|---|
+| GET | `/api/auth/google` | — | Inicia el flujo OAuth con Google |
+| GET | `/api/auth/google/callback` | — | Callback OAuth |
+| GET | `/api/auth/logout` | — | Cierra la sesión |
+| GET | `/api/auth/user` | — | Devuelve el usuario autenticado |
+
+### Calculadora — Proyectos
+
+| Método | Ruta | Auth | Descripción |
+|---|---|---|---|
+| GET | `/api/projects` | ✓ | Lista los proyectos del usuario |
+| POST | `/api/projects` | ✓ | Guarda un nuevo proyecto |
+| PUT | `/api/projects/:id` | ✓ | Actualiza un proyecto |
+| DELETE | `/api/projects/:id` | ✓ | Elimina un proyecto |
+
+### Análisis de archivos
+
+| Método | Ruta | Auth | Descripción |
+|---|---|---|---|
+| POST | `/api/analyze-gcode` | — | Analiza un G-code con IA; devuelve tiempo, peso y materiales |
+| POST | `/api/analyze-3mf` | — | Analiza un 3MF; devuelve placas con filamentos, tiempos y pesos |
+
+### Inventario de bobinas
+
+| Método | Ruta | Auth | Descripción |
+|---|---|---|---|
+| GET | `/api/inventory/spools` | ✓ | Lista todas las bobinas del usuario |
+| POST | `/api/inventory/spools` | ✓ | Añade una nueva bobina |
+| PUT | `/api/inventory/spools/:id` | ✓ | Actualiza datos de una bobina |
+| DELETE | `/api/inventory/spools/:id` | ✓ | Elimina una bobina |
+| PATCH | `/api/inventory/spools/:id/deduct` | ✓ | Deduce gramos tras una impresión |
+| PATCH | `/api/inventory/spools/:id/finish` | ✓ | Marca una bobina como agotada |
+| GET | `/api/inventory/:spoolId/consumos` | ✓ | Historial de consumos de una bobina |
+| GET | `/api/inventory/custom-options` | ✓ | Marcas y materiales personalizados |
+
+### Escáner de filamentos
+
+| Método | Ruta | Auth | Descripción |
+|---|---|---|---|
+| POST | `/api/lookup-filament` | — | Busca datos por código de barras / QR |
+| POST | `/api/filaments-community` | ✓ | Contribuye datos escaneados a la BD comunitaria |
+
+### Tracker de proyectos
+
+| Método | Ruta | Auth | Descripción |
+|---|---|---|---|
+| GET | `/api/tracker/projects` | ✓ | Lista proyectos del tracker |
+| POST | `/api/tracker/projects` | ✓ | Crea un proyecto |
+| PUT | `/api/tracker/projects/:id` | ✓ | Actualiza un proyecto |
+| DELETE | `/api/tracker/projects/:id` | ✓ | Elimina un proyecto |
+| GET | `/api/tracker/projects/:projectId/pieces` | ✓ | Lista las piezas de un proyecto |
+| POST | `/api/tracker/projects/:projectId/pieces` | ✓ | Añade una pieza |
+| PUT | `/api/tracker/projects/:projectId/pieces/:id` | ✓ | Actualiza una pieza |
+| DELETE | `/api/tracker/projects/:projectId/pieces/:id` | ✓ | Elimina una pieza |
+| POST | `/api/tracker/projects/:projectId/pieces/reorder` | ✓ | Reordena las piezas |
+
+### PDF y estadísticas
+
+| Método | Ruta | Auth | Descripción |
+|---|---|---|---|
+| GET | `/api/pdf/config` | ✓ | Obtiene la configuración del PDF |
+| POST | `/api/pdf/config` | ✓ | Guarda la configuración del PDF |
+| POST | `/api/pdf/upload-logo` | ✓ | Sube el logo para el PDF |
+| POST | `/api/pdf/preview` | ✓ | Genera una vista previa del PDF |
+| POST | `/api/pdf/generate` | ✓ | Genera el PDF final |
+| POST | `/api/tracker/pdf/preview` | ✓ | Vista previa PDF del tracker |
+| POST | `/api/tracker/pdf/generate` | ✓ | PDF final del tracker |
+| GET | `/api/stats` | ✓ | Estadísticas globales del usuario |
 
 ---
 
@@ -228,17 +314,31 @@ Precio final     = base IVA + IVA
 
 ## PWA — Instalar como aplicación
 
-La app es una **Progressive Web App (PWA)**. Al acceder desde Chrome o Edge (Android/escritorio), aparecerá automáticamente el botón **"Instalar"** en la cabecera. En iOS/Safari se puede instalar desde el menú compartir → *Añadir a pantalla de inicio*.
+FilamentOS es una **Progressive Web App (PWA)**. Al acceder desde Chrome o Edge (Android/escritorio), aparecerá el botón **"Instalar"** en la cabecera. En iOS/Safari: menú compartir → *Añadir a pantalla de inicio*.
+
+---
+
+## Apoya el proyecto
+
+FilamentOS es un proyecto personal de código abierto. Si te resulta útil, puedes apoyar su desarrollo:
+
+<a href="https://www.buymeacoffee.com/luprintech" target="_blank" rel="noopener noreferrer">
+  <img
+    src="https://img.buymeacoffee.com/button-api/?text=Alimenta%20filamentOS&emoji=🍔&slug=luprintech&button_colour=e694df&font_colour=000000&font_family=Cookie&outline_colour=000000&coffee_colour=FFDD00"
+    alt="Apoya FilamentOS en Buy Me a Coffee"
+    height="45"
+  />
+</a>
 
 ---
 
 ## Privacidad y cookies
 
-La aplicación utiliza únicamente **cookies técnicas** necesarias para la autenticación (cookie de sesión). No se emplean cookies de seguimiento ni publicidad.
+La aplicación utiliza únicamente **cookies técnicas** necesarias para la autenticación. No se emplean cookies de seguimiento ni publicidad.
 
-El aviso de cookies y la política de privacidad completa (conforme a RGPD y LSSI) están accesibles desde el banner de primera visita y el enlace en el pie de página.
+La política de privacidad completa (conforme a RGPD y LSSI) está accesible desde el pie de página.
 
-**Responsable:** Guadalupe Cano · luprintech@gmail.com
+**Responsable:** Guadalupe Cano · luprintech@gmail.com  
 **Autoridad de control:** [Agencia Española de Protección de Datos (AEPD)](https://www.aepd.es)
 
 ---
@@ -248,9 +348,9 @@ El aviso de cookies y la política de privacidad completa (conforme a RGPD y LSS
 - YouTube: [@Luprintech](https://www.youtube.com/@Luprintech)
 - Instagram: [@luprintech](https://www.instagram.com/luprintech/)
 - TikTok: [@luprintech](https://www.tiktok.com/@luprintech)
-- GitHub: [luprintech](https://github.com/luprintech)
+- GitHub: [Luprintech/calculadora3D](https://github.com/Luprintech/calculadora3D)
 - Email: luprintech@gmail.com
 
 ---
 
-© 2025 Guadalupe Cano. Todos los derechos reservados.
+© 2026 Guadalupe Cano. Todos los derechos reservados.

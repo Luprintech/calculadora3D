@@ -38,6 +38,13 @@ yarn-error.log*
 # base de datos local SQLite
 data.db
 backend/data.db
+data.db-shm
+data.db-wal
+backend/data.db-shm
+backend/data.db-wal
+
+# archivos subidos por usuarios (logos PDF, etc.)
+backend/uploads/
 
 # artefactos locales y temporales
 backend/*.log

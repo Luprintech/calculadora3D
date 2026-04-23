@@ -47,7 +47,7 @@ export function LoginPage() {
 
           <img
             src="/Logo.svg"
-            alt="Logo de Luprintech"
+            alt={t('logo_alt')}
             width={150}
             height={150}
             className="mx-auto mb-6 rounded-full shadow-lg border border-gray-200"

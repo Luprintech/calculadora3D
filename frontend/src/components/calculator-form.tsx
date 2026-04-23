@@ -56,7 +56,9 @@ import {
   Sparkles,
   Plus,
   X,
+  Box,
 } from "lucide-react";
+import { Import3MFModal, type Import3MFResult } from "@/components/import-3mf-modal";
 import { TooltipProvider } from "./ui/tooltip";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { useTranslation } from "react-i18next";
@@ -65,6 +67,7 @@ import { useCalculatorActions } from "@/features/calculator/model/use-calculator
 import { useInventory } from "@/features/inventory/api/use-inventory";
 import { cn } from "@/lib/utils";
 import type { Spool } from "@/features/inventory/types";
+import { useCurrency } from "@/context/currency-context";
 
 // ── Filament row sub-component ─────────────────────────────────────────────────
 
@@ -328,8 +331,14 @@ export function CalculatorForm({ form, onProjectSaved }: { form: UseFormReturn<F
   const { toast } = useToast();
   const { user, loginWithGoogle, loading: authLoading } = useAuth();
   const { t } = useTranslation();
+  const { currency } = useCurrency();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
+
+  // ── Sync global currency into form ───────────────────────────────────────────
+  React.useEffect(() => {
+    form.setValue('currency', currency, { shouldValidate: true });
+  }, [currency, form]);
 
   // ── Inventory spools ──────────────────────────────────────────────────────────
   const { spools } = useInventory({ authLoading, userId: user?.id ?? null });
@@ -345,25 +354,6 @@ export function CalculatorForm({ form, onProjectSaved }: { form: UseFormReturn<F
     control: form.control,
     name: "filaments",
   });
-
-  // Initialize with one empty row if array is empty (new project)
-  React.useEffect(() => {
-    if (filamentFields.length === 0) {
-      appendFilament({
-        id: generateId(),
-        mode: 'manual',
-        spoolId: '',
-        filamentType: 'PLA',
-        colorHex: '#888888',
-        colorName: '',
-        brand: '',
-        grams: 0,
-        spoolPrice: 0,
-        spoolWeight: 1000,
-      });
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const watchedValues = form.watch();
 
@@ -421,6 +411,31 @@ export function CalculatorForm({ form, onProjectSaved }: { form: UseFormReturn<F
 
   const [currentStep, setCurrentStep] = useState(0);
   const [pdfCustomizerOpen, setPdfCustomizerOpen] = useState(false);
+  const [import3mfOpen, setImport3mfOpen] = useState(false);
+
+  function handle3MFConfirm(result: Import3MFResult) {
+    // Fill print time
+    const hours = Math.floor(result.printTimeMinutes / 60);
+    const minutes = result.printTimeMinutes % 60;
+    form.setValue('printingTimeHours', hours);
+    form.setValue('printingTimeMinutes', minutes);
+
+    // Replace filaments array
+    if (result.filaments.length > 0) {
+      form.setValue('filaments', result.filaments);
+    }
+
+    // Auto-fill job name if currently empty
+    const currentName = form.getValues('jobName');
+    if (!currentName?.trim() && result.projectName) {
+      form.setValue('jobName', result.projectName);
+    }
+
+    toast({
+      title: t('tmf_applied_title'),
+      description: t('tmf_applied_msg', { count: result.filaments.length }),
+    });
+  }
   const totalSteps = 4;
 
   const wizardSteps = [
@@ -457,7 +472,7 @@ export function CalculatorForm({ form, onProjectSaved }: { form: UseFormReturn<F
                   <h2 className="font-headline text-2xl">{wizardSteps[currentStep].title}</h2>
                   <p className="text-sm text-muted-foreground">{wizardSteps[currentStep].subtitle}</p>
                 </div>
-                <div className="rounded-full bg-muted px-3 py-1 text-xs font-medium">
+                <div className="rounded-full bg-muted px-3 py-1 text-xs font-medium self-start md:self-auto">
                   {t('wizard_progress', { defaultValue: `Paso ${currentStep + 1} de ${totalSteps}` })}
                 </div>
               </div>
@@ -485,6 +500,8 @@ export function CalculatorForm({ form, onProjectSaved }: { form: UseFormReturn<F
                   );
                 })}
               </div>
+
+
             </CardContent>
           </Card>
 
@@ -501,34 +518,13 @@ export function CalculatorForm({ form, onProjectSaved }: { form: UseFormReturn<F
                     </AccordionTrigger>
                     <AccordionContent className="p-6 pt-0">
                       <div className="space-y-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <FormField control={form.control} name="jobName" render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>{t('cf_job_name')} <span className="text-destructive">*</span></FormLabel>
-                              <FormControl><Input className={inputClass} placeholder={t('cf_job_placeholder')} {...field} /></FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )} />
-                          <FormField control={form.control} name="currency" render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>{t('cf_currency')}</FormLabel>
-                              <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                <FormControl>
-                                  <SelectTrigger className={inputClass}>
-                                    <SelectValue placeholder={t('cf_currency_select')} />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                  <SelectItem value="EUR">{t('currency_eur')}</SelectItem>
-                                  <SelectItem value="USD">{t('currency_usd')}</SelectItem>
-                                  <SelectItem value="GBP">{t('currency_gbp')}</SelectItem>
-                                  <SelectItem value="JPY">{t('currency_jpy')}</SelectItem>
-                                </SelectContent>
-                              </Select>
-                              <FormMessage />
-                            </FormItem>
-                          )} />
-                        </div>
+                        <FormField control={form.control} name="jobName" render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>{t('cf_job_name')} <span className="text-destructive">*</span></FormLabel>
+                            <FormControl><Input className={inputClass} placeholder={t('cf_job_placeholder')} {...field} /></FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )} />
                         <div className="space-y-2">
                           <FormLabel>{t('cf_image')}</FormLabel>
                           <div className="flex items-center gap-4">
@@ -550,14 +546,18 @@ export function CalculatorForm({ form, onProjectSaved }: { form: UseFormReturn<F
                         <Separator />
                         <div>
                           <FormLabel>{t('cf_gcode_title')}</FormLabel>
-                          <div className="mt-2">
-                            <input type="file" ref={fileInputRef} onChange={handleGcodeAnalyze} accept=".gcode,.3mf" className="hidden" />
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            <input type="file" ref={fileInputRef} onChange={handleGcodeAnalyze} accept=".gcode" className="hidden" />
                             <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isAnalyzing}>
                               {isAnalyzing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UploadCloud className="mr-2 h-4 w-4" />}
                               {isAnalyzing ? t('cf_gcode_analyzing') : t('cf_gcode_upload')}
                             </Button>
-                            <p className="text-sm text-muted-foreground mt-2">{t('cf_gcode_hint')}</p>
+                            <Button type="button" variant="outline" onClick={() => setImport3mfOpen(true)} disabled={isAnalyzing}>
+                              <Box className="mr-2 h-4 w-4" />
+                              {t('tmf_btn')}
+                            </Button>
                           </div>
+                          <p className="text-sm text-muted-foreground mt-2">{t('cf_gcode_hint')}</p>
                           {analysisFeedback.kind !== 'idle' && (
                             <div className={`mt-3 rounded-lg border p-3 text-sm ${
                               analysisFeedback.kind === 'success'
@@ -819,37 +819,71 @@ export function CalculatorForm({ form, onProjectSaved }: { form: UseFormReturn<F
               <Button type="button" onClick={goPrev} variant="outline" disabled={currentStep === 0}>
                 {t('wizard_back', { defaultValue: 'Atrás' })}
               </Button>
+
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={handleSaveProject}
+                  disabled={isSaving}
+                  className="gap-1.5 text-xs"
+                >
+                  {isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                  {isSaving ? t('cf_saving') : t('cf_save_project')}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={handleShare}
+                  className="gap-1.5 text-xs"
+                >
+                  <Share2 className="h-3.5 w-3.5" />
+                  {t('cf_share')}
+                </Button>
+                {user && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setPdfCustomizerOpen(true)}
+                    className="gap-1.5 text-xs"
+                  >
+                    <Sparkles className="h-3.5 w-3.5" />
+                    Customizar PDF
+                  </Button>
+                )}
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={handleNewProject}
+                  className="gap-1.5 text-xs"
+                >
+                  <FilePlus className="h-3.5 w-3.5" />
+                  {t('cf_new_project')}
+                </Button>
+              </div>
+
               {currentStep < totalSteps - 1 ? (
                 <Button type="button" onClick={goNext}>
                   {t('wizard_next', { defaultValue: 'Continuar' })}
                 </Button>
               ) : (
-                <Button type="button" onClick={handleNewProject} variant="outline">
-                  <FilePlus className="mr-2 h-4 w-4" /> {t('cf_new_project')}
-                </Button>
+                <span className="w-[5rem]" />
               )}
             </div>
 
-            {currentStep === totalSteps - 1 && (
-              <div className="flex flex-col sm:flex-row gap-4 justify-end pt-2">
-                <Button onClick={handleSaveProject} disabled={isSaving} size="default" className="w-full sm:w-auto">
-                  {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                  {isSaving ? t('cf_saving') : t('cf_save_project')}
-                </Button>
-                <Button type="button" onClick={handleShare} variant="outline" className="w-full sm:w-auto"><Share2 className="mr-2 h-4 w-4"/> {t('cf_share')}</Button>
-                {user && (
-                  <Button 
-                    type="button" 
-                    onClick={() => setPdfCustomizerOpen(true)} 
-                    className="w-full sm:w-auto bg-primary text-primary-foreground hover:bg-primary/90 transition-transform hover:scale-105"
-                  >
-                    <Sparkles className="mr-2 h-4 w-4"/> Customizar PDF
-                  </Button>
-                )}
-              </div>
-            )}
           </div>
         </div>
+
+        {/* Import 3MF Modal */}
+        <Import3MFModal
+          open={import3mfOpen}
+          onClose={() => setImport3mfOpen(false)}
+          onConfirm={handle3MFConfirm}
+          spools={spools}
+        />
 
         {/* PDF Customizer Modal */}
         {user && (
