@@ -1,7 +1,12 @@
 import React, { Suspense } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Youtube, Instagram, LogOut, Sun, Moon, Download, Calculator as CalculatorIcon, BarChart3, LineChart, Package, FlaskConical, Info } from 'lucide-react';import { Loader2 } from 'lucide-react';
+import {
+  Youtube, Instagram, LogOut, Sun, Moon, Download,
+  Calculator as CalculatorIcon, BarChart3, LineChart, Package, FlaskConical, Info,
+} from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useTranslation } from 'react-i18next';
 import { motion } from 'framer-motion';
@@ -13,7 +18,6 @@ import { formSchema, type FormData } from '@/lib/schema';
 import { defaultFormValues } from '@/lib/defaults';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
-import { LoginPage } from '@/components/login-page';
 import { AuthProvider, useAuth } from '@/context/auth-context';
 import { usePwaInstall } from '@/hooks/use-pwa-install';
 import { useCookieConsent } from '@/hooks/use-cookie-consent';
@@ -30,13 +34,14 @@ import { ErrorBoundary } from '@/components/error-boundary';
 import { QueryProvider } from '@/components/query-provider';
 import { AboutModal } from '@/components/about-modal';
 import { BuyMeCoffeeButton } from '@/components/buy-me-coffee-button';
-
 import { InventoryDashboard } from '@/features/inventory';
+import { HomePage } from '@/pages/HomePage';
 
 const StatsDashboard = React.lazy(() =>
   import('@/features/stats/components/stats-dashboard').then((m) => ({ default: m.StatsDashboard }))
 );
 
+// ── Theme toggle ──────────────────────────────────────────────────────────────
 function ThemeToggle() {
   const { resolvedTheme, setTheme } = useTheme();
   const { t } = useTranslation();
@@ -52,8 +57,60 @@ function ThemeToggle() {
   );
 }
 
-function Calculator() {
-  const { user, logout, loginWithGoogle, loading: authLoading } = useAuth();
+// ── Ruta protegida ────────────────────────────────────────────────────────────
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { isGuest, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!isGuest) return <Navigate to="/" replace />;
+  return <>{children}</>;
+}
+
+// ── Ruta raíz: landing si no autenticado, app si sí ──────────────────────────
+function RootRoute() {
+  const { isAuthenticated, isDemoMode, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (isAuthenticated || isDemoMode) return <Navigate to="/calculadora" replace />;
+  return <HomePage />;
+}
+
+// ── Ruta /demo: activa demo y redirige ────────────────────────────────────────
+function DemoRoute() {
+  const { enterDemoMode, isLoading } = useAuth();
+  const navigate = useNavigate();
+
+  React.useEffect(() => {
+    if (!isLoading) {
+      enterDemoMode();
+      navigate('/calculadora', { replace: true });
+    }
+  }, [isLoading, enterDemoMode, navigate]);
+
+  return (
+    <div className="flex h-screen items-center justify-center">
+      <Loader2 className="h-12 w-12 animate-spin text-primary" />
+    </div>
+  );
+}
+
+// ── App principal ─────────────────────────────────────────────────────────────
+function AppShell() {
+  const { user, logout, loginWithGoogle, loading: authLoading, isDemoMode, exitDemoMode } = useAuth();
   const { t } = useTranslation();
   const { resolvedTheme } = useTheme();
   const logoSrc = resolvedTheme === 'dark' ? '/filamentos_negro.png' : '/filamentos_blanco.png';
@@ -78,13 +135,14 @@ function Calculator() {
       setDevLoading(false);
     }
   }
+
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: defaultFormValues,
   });
   const currentYear = new Date().getFullYear();
 
-  const displayName = user?.name ?? user?.email ?? '';
+  const displayName = user?.name ?? user?.email ?? (isDemoMode ? 'Demo' : '');
   const avatarUrl = user?.photo ?? undefined;
   const initials = displayName.charAt(0).toUpperCase();
 
@@ -98,71 +156,94 @@ function Calculator() {
           className="mb-8 rounded-2xl border border-border/70 bg-card/95 p-4 shadow-[0_12px_36px_rgba(2,8,23,0.10)] backdrop-blur-md print:hidden dark:border-white/10 dark:bg-card/70 dark:shadow-[0_18px_60px_rgba(0,0,0,0.22)] sm:p-5"
         >
           <div className="flex flex-col items-center gap-4 text-center sm:flex-row sm:justify-between">
-          <div className="flex items-center gap-4">
-            <img
-              src={logoSrc}
-              alt={t('logo_alt')}
-              width={80}
-              height={80}
-              className="rounded-full shadow-lg border border-gray-200"
-            />
-            <div className="text-left">
-              <h1 className="font-headline text-3xl font-bold tracking-tighter text-primary sm:text-4xl">
-                {t('app_title')}
-              </h1>
-              <p className="text-xs font-medium text-muted-foreground/80 -mt-0.5">El sistema operativo de tus impresiones 3D</p>
-              <p className="text-sm text-muted-foreground mt-0.5">{t('welcome', { name: displayName })}</p>
+            <div className="flex items-center gap-4">
+              <img
+                src={logoSrc}
+                alt={t('logo_alt')}
+                width={80}
+                height={80}
+                className="rounded-full shadow-lg border border-gray-200"
+              />
+              <div className="text-left">
+                <h1 className="font-headline text-3xl font-bold tracking-tighter text-primary sm:text-4xl">
+                  {t('app_title')}
+                </h1>
+                <p className="text-xs font-medium text-muted-foreground/80 -mt-0.5">
+                  El sistema operativo de tus impresiones 3D
+                </p>
+                {isDemoMode ? (
+                  <p className="mt-0.5 inline-flex items-center gap-1.5 rounded-full bg-purple-100 px-2.5 py-0.5 text-xs font-semibold text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">
+                    👀 Modo demo
+                  </p>
+                ) : (
+                  <p className="text-sm text-muted-foreground mt-0.5">{t('welcome', { name: displayName })}</p>
+                )}
+              </div>
             </div>
-          </div>
-          <div className="flex items-center gap-2">
-            {canInstall && (
-              <Button variant="outline" size="sm" onClick={install} title={t('install_title')}>
-                <Download className="mr-2 h-4 w-4" /> {t('install')}
+            <div className="flex items-center gap-2">
+              {canInstall && (
+                <Button variant="outline" size="sm" onClick={install} title={t('install_title')}>
+                  <Download className="mr-2 h-4 w-4" /> {t('install')}
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                size="icon"
+                aria-label="Acerca de FilamentOS"
+                onClick={() => setAboutOpen(true)}
+              >
+                <Info className="h-4 w-4" />
               </Button>
-            )}
-            <Button
-              variant="outline"
-              size="icon"
-              aria-label="Acerca de FilamentOS"
-              onClick={() => setAboutOpen(true)}
-            >
-              <Info className="h-4 w-4" />
-            </Button>
-            <ThemeToggle />
-            <LanguageSelector />
-            <CurrencySelector />
-            {user ? (
-              <>
-                <Button onClick={logout} variant="outline" size="icon" title={t('sign_out')}>
-                  <LogOut className="h-4 w-4" />
-                </Button>
-                {avatarUrl && (
-                  <Avatar>
-                    <AvatarImage src={avatarUrl} alt={displayName} />
-                    <AvatarFallback>{initials}</AvatarFallback>
-                  </Avatar>
-                )}
-              </>
-            ) : (
-              <>
-                <Button onClick={loginWithGoogle} variant="outline" size="sm">
-                  {t('sign_in')}
-                </Button>
-                {isDevMode && (
-                  <Button
-                    onClick={handleDevLogin}
-                    disabled={devLoading}
-                    variant="outline"
-                    size="sm"
-                    className="border-dashed border-yellow-500/60 text-yellow-500 hover:bg-yellow-500/10 hover:text-yellow-400"
-                    title="Dev Login — usuario de seed"
-                  >
-                    {devLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <FlaskConical className="h-4 w-4" />}
+              <ThemeToggle />
+              <LanguageSelector />
+              <CurrencySelector />
+              {user ? (
+                <>
+                  <Button onClick={logout} variant="outline" size="icon" title={t('sign_out')}>
+                    <LogOut className="h-4 w-4" />
                   </Button>
-                )}
-              </>
-            )}
-          </div>
+                  {avatarUrl && (
+                    <Avatar>
+                      <AvatarImage src={avatarUrl} alt={displayName} />
+                      <AvatarFallback>{initials}</AvatarFallback>
+                    </Avatar>
+                  )}
+                </>
+              ) : isDemoMode ? (
+                <>
+                  <Button onClick={loginWithGoogle} variant="outline" size="sm" className="rounded-full font-bold">
+                    Crear cuenta gratis
+                  </Button>
+                  <Button
+                    onClick={() => { exitDemoMode(); window.location.href = '/'; }}
+                    variant="ghost"
+                    size="sm"
+                    className="text-xs text-muted-foreground"
+                    title="Salir del modo demo"
+                  >
+                    <LogOut className="h-3.5 w-3.5" />
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button onClick={loginWithGoogle} variant="outline" size="sm">
+                    {t('sign_in')}
+                  </Button>
+                  {isDevMode && (
+                    <Button
+                      onClick={handleDevLogin}
+                      disabled={devLoading}
+                      variant="outline"
+                      size="sm"
+                      className="border-dashed border-yellow-500/60 text-yellow-500 hover:bg-yellow-500/10 hover:text-yellow-400"
+                      title="Dev Login — usuario de seed"
+                    >
+                      {devLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <FlaskConical className="h-4 w-4" />}
+                    </Button>
+                  )}
+                </>
+              )}
+            </div>
           </div>
         </motion.header>
 
@@ -207,9 +288,11 @@ function Calculator() {
                     {t('calc_hero_subtitle')}
                   </p>
                 </section>
-
                 <div className="grid grid-cols-1 gap-7 xl:grid-cols-[minmax(0,1fr)_380px]">
-                  <CalculatorForm form={form} onProjectSaved={() => setProjectRefreshKey((value) => value + 1)} />
+                  <CalculatorForm
+                    form={form}
+                    onProjectSaved={() => setProjectRefreshKey((v) => v + 1)}
+                  />
                   <CostProjectsPanel form={form} refreshKey={projectRefreshKey} />
                 </div>
               </div>
@@ -253,6 +336,7 @@ function Calculator() {
         </Tabs>
       </div>
 
+      {/* Footer */}
       <footer className="w-full py-6 text-center text-sm text-muted-foreground print:hidden mt-12">
         <div className="flex justify-center gap-6 mb-4">
           <a href="https://www.youtube.com/@Luprintech" target="_blank" rel="noopener noreferrer" aria-label="YouTube" className="hover:text-primary transition-colors">
@@ -282,13 +366,9 @@ function Calculator() {
             }
           />
         </p>
-
-        {/* Apoya el proyecto */}
         <div className="mt-4 border-t border-[#8b5cf6]/15 pt-4">
           <div className="flex flex-col items-center gap-2">
-            <p className="text-sm text-gray-400">
-              ¿Te es útil FilamentOS? Puedes invitarme a un café
-            </p>
+            <p className="text-sm text-gray-400">¿Te es útil FilamentOS? Puedes invitarme a un café</p>
             <BuyMeCoffeeButton size="md" />
           </div>
         </div>
@@ -299,19 +379,56 @@ function Calculator() {
   );
 }
 
+// ── AppContent: routing root ──────────────────────────────────────────────────
 function AppContent() {
-  const { loading } = useAuth();
   const { accepted, accept } = useCookieConsent();
 
   return (
     <>
-      {loading ? (
-        <div className="flex h-screen items-center justify-center">
-          <Loader2 className="h-12 w-12 animate-spin text-primary" />
-        </div>
-      ) : (
-        <Calculator />
-      )}
+      <Routes>
+        {/* Raíz: landing si no autenticado, app si sí */}
+        <Route path="/" element={<RootRoute />} />
+
+        {/* Ruta demo: activa modo demo y redirige a /calculadora */}
+        <Route path="/demo" element={<DemoRoute />} />
+
+        {/* Rutas protegidas (requieren auth real o modo demo) */}
+        <Route
+          path="/calculadora"
+          element={
+            <ProtectedRoute>
+              <AppShell />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/tracker"
+          element={
+            <ProtectedRoute>
+              <AppShell />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/estadisticas"
+          element={
+            <ProtectedRoute>
+              <AppShell />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/inventario"
+          element={
+            <ProtectedRoute>
+              <AppShell />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Fallback */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
       {!accepted && <CookieBanner onAccept={accept} />}
     </>
   );
@@ -323,10 +440,12 @@ export default function App() {
       <ErrorBoundary>
         <QueryProvider>
           <CurrencyProvider>
-            <AuthProvider>
-              <AppContent />
-              <Toaster />
-            </AuthProvider>
+            <BrowserRouter>
+              <AuthProvider>
+                <AppContent />
+                <Toaster />
+              </AuthProvider>
+            </BrowserRouter>
           </CurrencyProvider>
         </QueryProvider>
       </ErrorBoundary>

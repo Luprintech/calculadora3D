@@ -236,10 +236,14 @@ interface ProjectManagerProps {
   onDelete: (id: string) => Promise<void> | void;
   onSelect: (id: string) => void;
   onOpenProject: (id: string) => void;
+  /** Cuando true, los botones mutantes llaman a onDemoAction en lugar de abrir diálogos */
+  demoMode?: boolean;
+  onDemoAction?: () => void;
 }
 
 export function ProjectManager({
   projects, activeProjectId, onCreate, onUpdate, onDelete, onSelect, onOpenProject,
+  demoMode = false, onDemoAction,
 }: ProjectManagerProps) {
   const { t } = useTranslation();
   const iconClass = 'h-4 w-4';
@@ -317,7 +321,7 @@ export function ProjectManager({
           {projects.length > 0 && (
             <Button
               className="challenge-btn-primary shrink-0 rounded-full px-5 font-extrabold"
-              onClick={() => setCreateOpen(true)}
+              onClick={() => demoMode ? onDemoAction?.() : setCreateOpen(true)}
             >
               {t('pm_new')}
             </Button>
@@ -382,7 +386,7 @@ export function ProjectManager({
 
                 <Button
                   className="challenge-btn-primary w-full rounded-full font-extrabold"
-                  onClick={() => onOpenProject(selectedProject.id)}
+                  onClick={() => demoMode ? onDemoAction?.() : onOpenProject(selectedProject.id)}
                 >
                   {t('pm_open')}
                 </Button>

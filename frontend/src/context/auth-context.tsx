@@ -1,41 +1,89 @@
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { getAuthUser, logoutAuth, type AuthUser } from '@/features/auth/api/auth-api';
+import React, { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
+import { logoutAuth, type AuthUser } from '@/features/auth/api/auth-api';
 import { useAuthUser } from '@/features/auth/api/use-auth';
 
 export type LocalUser = AuthUser;
 
+const DEMO_KEY = 'filamentos_demo_mode';
+
 interface AuthContextType {
+  // Estado de autenticación
   user: LocalUser | null;
-  loading: boolean;
+  isAuthenticated: boolean;    // tiene cuenta real activa
+  isDemoMode: boolean;         // está en modo demo
+  isGuest: boolean;            // isAuthenticated || isDemoMode (puede usar la app)
+  loading: boolean;            // alias de isLoading para compatibilidad
+  isLoading: boolean;
+
+  // Acciones
   loginWithGoogle: () => void;
   logout: () => Promise<void>;
+  enterDemoMode: () => void;
+  exitDemoMode: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  // Usar React Query para obtener el usuario
   const { data: user, isLoading } = useAuthUser();
-  const [localLoading, setLocalLoading] = useState(true);
 
-  // Sincronizar loading state para compatibilidad con el código existente
-  useEffect(() => {
-    if (!isLoading) {
-      setLocalLoading(false);
+  // Inicializar isDemoMode desde localStorage
+  const [isDemoMode, setIsDemoMode] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(DEMO_KEY) === 'true';
+    } catch {
+      return false;
     }
-  }, [isLoading]);
+  });
 
-  const loginWithGoogle = () => {
+  // Si el usuario se autentica con una cuenta real, limpiar el modo demo
+  useEffect(() => {
+    if (user && isDemoMode) {
+      setIsDemoMode(false);
+      try { localStorage.removeItem(DEMO_KEY); } catch { /* noop */ }
+    }
+  }, [user, isDemoMode]);
+
+  const loginWithGoogle = useCallback(() => {
     window.location.href = '/api/auth/google';
-  };
+  }, []);
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     await logoutAuth();
+    setIsDemoMode(false);
+    try { localStorage.removeItem(DEMO_KEY); } catch { /* noop */ }
     window.location.href = '/';
-  };
+  }, []);
+
+  const enterDemoMode = useCallback(() => {
+    try { localStorage.setItem(DEMO_KEY, 'true'); } catch { /* noop */ }
+    setIsDemoMode(true);
+  }, []);
+
+  const exitDemoMode = useCallback(() => {
+    try { localStorage.removeItem(DEMO_KEY); } catch { /* noop */ }
+    setIsDemoMode(false);
+  }, []);
+
+  const resolvedUser = user ?? null;
+  const isAuthenticated = !isLoading && resolvedUser !== null;
+  const isGuest = isAuthenticated || isDemoMode;
 
   return (
-    <AuthContext.Provider value={{ user: user ?? null, loading: isLoading || localLoading, loginWithGoogle, logout }}>
+    <AuthContext.Provider
+      value={{
+        user: resolvedUser,
+        isAuthenticated,
+        isDemoMode,
+        isGuest,
+        loading: isLoading,
+        isLoading,
+        loginWithGoogle,
+        logout,
+        enterDemoMode,
+        exitDemoMode,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

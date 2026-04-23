@@ -10,6 +10,10 @@ import { DeductModal } from './deduct-modal';
 import { BarcodeScannerModal, type ScannerFillData } from './barcode-scanner-modal';
 import type { Spool, SpoolInput } from '../types';
 import { getTotalInventoryValue, getAverageCostPerKg, isLowStock } from '../types';
+import { DemoBanner } from '@/components/demo-banner';
+import { LoginRequiredModal } from '@/components/login-required-modal';
+import { mockSpools } from '@/data/mockData';
+import { useAuth } from '@/context/auth-context';
 
 interface InventoryDashboardProps {
   userId: string | null;
@@ -18,7 +22,8 @@ interface InventoryDashboardProps {
 
 export function InventoryDashboard({ userId, authLoading }: InventoryDashboardProps) {
   const { t } = useTranslation();
-  const { spools, loading, error, customBrands, customMaterials, createSpool, updateSpool, deleteSpool, deductSpool, finishSpool } =
+  const { isDemoMode } = useAuth();
+  const { spools: realSpools, loading, error, customBrands, customMaterials, createSpool, updateSpool, deleteSpool, deductSpool, finishSpool } =
     useInventory({ userId, authLoading });
 
   const [formOpen, setFormOpen] = useState(false);
@@ -27,6 +32,10 @@ export function InventoryDashboard({ userId, authLoading }: InventoryDashboardPr
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [scannerOpen, setScannerOpen] = useState(false);
   const [scanPrefill, setScanPrefill] = useState<Partial<ScannerFillData> | null>(null);
+  const [loginModalOpen, setLoginModalOpen] = useState(false);
+
+  // En modo demo, usar datos mock
+  const spools = isDemoMode ? mockSpools : realSpools;
 
   // ── Derived metrics ──────────────────────────────────────────────────────────
   const totalValue = getTotalInventoryValue(spools);
@@ -37,6 +46,7 @@ export function InventoryDashboard({ userId, authLoading }: InventoryDashboardPr
   // ── Handlers ─────────────────────────────────────────────────────────────────
 
   function handleOpenAdd() {
+    if (isDemoMode) { setLoginModalOpen(true); return; }
     setEditingSpool(null);
     setScanPrefill(null);
     setFormOpen(true);
@@ -50,6 +60,7 @@ export function InventoryDashboard({ userId, authLoading }: InventoryDashboardPr
   }
 
   function handleOpenEdit(spool: Spool) {
+    if (isDemoMode) { setLoginModalOpen(true); return; }
     setEditingSpool(spool);
     setFormOpen(true);
   }
@@ -63,6 +74,7 @@ export function InventoryDashboard({ userId, authLoading }: InventoryDashboardPr
   }
 
   async function handleDelete(id: string) {
+    if (isDemoMode) { setLoginModalOpen(true); return; }
     if (deleteConfirm === id) {
       await deleteSpool(id);
       setDeleteConfirm(null);
@@ -72,16 +84,18 @@ export function InventoryDashboard({ userId, authLoading }: InventoryDashboardPr
   }
 
   async function handleDeduct(id: string, grams: number) {
+    if (isDemoMode) { setLoginModalOpen(true); return; }
     await deductSpool(id, grams);
   }
 
   async function handleFinish(id: string) {
+    if (isDemoMode) { setLoginModalOpen(true); return; }
     await finishSpool(id);
   }
 
   // ── Render ────────────────────────────────────────────────────────────────────
 
-  if (!userId && !authLoading) {
+  if (!userId && !authLoading && !isDemoMode) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center text-muted-foreground">
         <Package className="mb-4 h-12 w-12 opacity-30" />
@@ -92,6 +106,11 @@ export function InventoryDashboard({ userId, authLoading }: InventoryDashboardPr
 
   return (
     <section className="space-y-6">
+      {/* DemoBanner */}
+      {isDemoMode && (
+        <DemoBanner message="👀 Inventario de ejemplo. Inicia sesión para gestionar tus bobinas reales." />
+      )}
+
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
@@ -99,11 +118,20 @@ export function InventoryDashboard({ userId, authLoading }: InventoryDashboardPr
           <p className="text-sm text-muted-foreground">{t('inventory.subtitle')}</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setScannerOpen(true)} className="rounded-full font-bold">
+          <Button
+            variant="outline"
+            onClick={() => isDemoMode ? setLoginModalOpen(true) : setScannerOpen(true)}
+            className={`rounded-full font-bold ${isDemoMode ? 'cursor-not-allowed opacity-50' : ''}`}
+            title={isDemoMode ? 'Inicia sesión para gestionar tu inventario' : undefined}
+          >
             <ScanLine className="mr-1.5 h-4 w-4" />
             <span className="hidden sm:inline">{t('scan_btn')}</span>
           </Button>
-          <Button onClick={handleOpenAdd} className="rounded-full font-bold">
+          <Button
+            onClick={handleOpenAdd}
+            className={`rounded-full font-bold ${isDemoMode ? 'cursor-not-allowed opacity-50' : ''}`}
+            title={isDemoMode ? 'Inicia sesión para gestionar tu inventario' : undefined}
+          >
             <Plus className="mr-1.5 h-4 w-4" />
             {t('inventory.addSpool')}
           </Button>
@@ -116,11 +144,7 @@ export function InventoryDashboard({ userId, authLoading }: InventoryDashboardPr
         <MetricCard label={t('inventory.avgCostKg')} value={`€ ${avgCostPerKg.toFixed(2)}/kg`} />
         <MetricCard label={t('inventory.activeSpools')} value={String(activeCount)} />
         {lowStockCount > 0 ? (
-          <MetricCard
-            label={t('inventory.lowStockAlert')}
-            value={String(lowStockCount)}
-            highlight
-          />
+          <MetricCard label={t('inventory.lowStockAlert')} value={String(lowStockCount)} highlight />
         ) : (
           <MetricCard label={t('inventory.lowStockAlert')} value="0" />
         )}
@@ -134,15 +158,15 @@ export function InventoryDashboard({ userId, authLoading }: InventoryDashboardPr
         </div>
       )}
 
-      {/* Error */}
-      {error && (
+      {/* Error (solo modo real) */}
+      {!isDemoMode && error && (
         <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
           {error.message}
         </div>
       )}
 
-      {/* Loading skeletons */}
-      {loading && (
+      {/* Loading skeletons (solo modo real) */}
+      {!isDemoMode && loading && (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {[1, 2, 3].map((i) => (
             <Skeleton key={i} className="h-40 rounded-2xl" />
@@ -150,8 +174,8 @@ export function InventoryDashboard({ userId, authLoading }: InventoryDashboardPr
         </div>
       )}
 
-      {/* Empty state */}
-      {!loading && spools.length === 0 && (
+      {/* Empty state (solo modo real) */}
+      {!isDemoMode && !loading && spools.length === 0 && (
         <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/60 py-16 text-center">
           <Package className="mb-3 h-10 w-10 text-muted-foreground/40" />
           <p className="font-semibold text-muted-foreground">{t('inventory.emptyTitle')}</p>
@@ -164,18 +188,15 @@ export function InventoryDashboard({ userId, authLoading }: InventoryDashboardPr
       )}
 
       {/* Spool grid */}
-      {!loading && spools.length > 0 && (
+      {(isDemoMode || (!loading && spools.length > 0)) && (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {spools.map((spool) => (
             <div key={spool.id}>
-              {deleteConfirm === spool.id && (
+              {!isDemoMode && deleteConfirm === spool.id && (
                 <div className="mb-2 rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
                   <p className="font-semibold">{t('inventory.deleteConfirm', { name: `${spool.brand} ${spool.color}` })}</p>
                   <div className="mt-1.5 flex gap-2">
-                    <button
-                      onClick={() => handleDelete(spool.id)}
-                      className="font-bold underline underline-offset-2"
-                    >
+                    <button onClick={() => handleDelete(spool.id)} className="font-bold underline underline-offset-2">
                       {t('delete')}
                     </button>
                     <button onClick={() => setDeleteConfirm(null)} className="text-muted-foreground">
@@ -190,35 +211,50 @@ export function InventoryDashboard({ userId, authLoading }: InventoryDashboardPr
                 onDelete={handleDelete}
                 onDeduct={setDeductTarget}
                 onFinish={handleFinish}
+                demoMode={isDemoMode}
+                onDemoAction={() => setLoginModalOpen(true)}
               />
             </div>
           ))}
         </div>
       )}
 
-      {/* Add/Edit Form modal */}
-      <SpoolForm
-        open={formOpen}
-        onClose={() => { setFormOpen(false); setScanPrefill(null); }}
-        onSubmit={handleFormSubmit}
-        editingSpool={editingSpool}
-        customBrands={customBrands}
-        customMaterials={customMaterials}
-        prefill={scanPrefill ?? undefined}
-      />
+      {/* Add/Edit Form modal (solo modo real) */}
+      {!isDemoMode && (
+        <SpoolForm
+          open={formOpen}
+          onClose={() => { setFormOpen(false); setScanPrefill(null); }}
+          onSubmit={handleFormSubmit}
+          editingSpool={editingSpool}
+          customBrands={customBrands}
+          customMaterials={customMaterials}
+          prefill={scanPrefill ?? undefined}
+        />
+      )}
 
-      {/* Deduct modal */}
-      <DeductModal
-        spool={deductTarget}
-        onClose={() => setDeductTarget(null)}
-        onDeduct={handleDeduct}
-      />
+      {/* Deduct modal (solo modo real) */}
+      {!isDemoMode && (
+        <DeductModal
+          spool={deductTarget}
+          onClose={() => setDeductTarget(null)}
+          onDeduct={handleDeduct}
+        />
+      )}
 
-      {/* Barcode scanner modal */}
-      <BarcodeScannerModal
-        open={scannerOpen}
-        onClose={() => setScannerOpen(false)}
-        onFill={handleScanFill}
+      {/* Barcode scanner modal (solo modo real) */}
+      {!isDemoMode && (
+        <BarcodeScannerModal
+          open={scannerOpen}
+          onClose={() => setScannerOpen(false)}
+          onFill={handleScanFill}
+        />
+      )}
+
+      {/* Login required modal */}
+      <LoginRequiredModal
+        open={loginModalOpen}
+        onOpenChange={setLoginModalOpen}
+        message="Inicia sesión para gestionar tu inventario de bobinas reales."
       />
     </section>
   );

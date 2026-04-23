@@ -22,6 +22,9 @@ import type { EditingState, FilamentProject, TrackerView } from './filament-type
 import type { PieceInput, ProjectInput } from './use-filament-storage';
 import { useTranslation } from 'react-i18next';
 import { useInventory } from '@/features/inventory/api/use-inventory';
+import { DemoBanner } from '@/components/demo-banner';
+import { LoginRequiredModal } from '@/components/login-required-modal';
+import { mockTrackerProjects, toFilamentProject } from '@/data/mockData';
 
 // ── Login gate ────────────────────────────────────────────────────────────────
 
@@ -49,24 +52,31 @@ function LoginPrompt() {
 // ── Main tracker ──────────────────────────────────────────────────────────────
 
 export function FilamentTracker() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, isDemoMode } = useAuth();
   const { t } = useTranslation();
 
+  // Always call hooks (rules of hooks) — pass null userId in demo mode so they're no-ops
   const {
     loading, error,
-    projects,
+    projects: realProjects,
     activeProject, createProject, updateProject, deleteProject, selectProject,
     pieces, addPiece, updatePiece, deletePiece, reorderPieces,
-  } = useFilamentStorage({ authLoading, userId: user?.id ?? null });
+  } = useFilamentStorage({ authLoading, userId: isDemoMode ? null : (user?.id ?? null) });
 
-  const { spools: allSpools } = useInventory({ authLoading, userId: user?.id ?? null });
+  const { spools: allSpools } = useInventory({ authLoading, userId: isDemoMode ? null : (user?.id ?? null) });
   const activeSpools = allSpools.filter((s) => s.status === 'active');
+
+  // In demo mode, use mock projects; real mode uses API data
+  const projects: FilamentProject[] = isDemoMode
+    ? mockTrackerProjects.map(toFilamentProject)
+    : realProjects;
 
   const [view, setView]                 = useState<TrackerView>('manager');
   const [editingState, setEditingState] = useState<EditingState>({ mode: 'create' });
   const [editingProject, setEditingProject] = useState<FilamentProject | null>(null);
   const [deleteTargetProject, setDeleteTargetProject] = useState<FilamentProject | null>(null);
   const [pdfCustomizerOpen, setPdfCustomizerOpen] = useState(false);
+  const [loginModalOpen, setLoginModalOpen] = useState(false);
 
   function openPdfCustomizer() {
     setPdfCustomizerOpen(true);
@@ -102,7 +112,37 @@ export function FilamentTracker() {
     );
   }
 
-  if (!user) return <LoginPrompt />;
+  if (!user && !isDemoMode) return <LoginPrompt />;
+
+  // ── Demo mode: read-only manager view ────────────────────────────────────────
+  if (isDemoMode) {
+    return (
+      <>
+        <DemoBanner message="👀 Proyectos de ejemplo. Inicia sesión para crear y gestionar tus series reales." />
+        <div className="relative overflow-hidden rounded-[32px] print:hidden">
+          <TrackerGalaxyBackground />
+          <div className="relative z-10 p-1">
+            <ProjectManager
+              projects={projects}
+              activeProjectId={projects[0]?.id ?? null}
+              onCreate={() => setLoginModalOpen(true)}
+              onUpdate={() => setLoginModalOpen(true)}
+              onDelete={() => setLoginModalOpen(true)}
+              onSelect={() => {}}
+              onOpenProject={() => setLoginModalOpen(true)}
+              demoMode
+              onDemoAction={() => setLoginModalOpen(true)}
+            />
+          </div>
+        </div>
+        <LoginRequiredModal
+          open={loginModalOpen}
+          onOpenChange={setLoginModalOpen}
+          message="Inicia sesión para crear y gestionar tus proyectos de seguimiento."
+        />
+      </>
+    );
+  }
 
   if (loading) {
     return (

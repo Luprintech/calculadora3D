@@ -10,6 +10,8 @@ import { StatsCharts } from './stats-charts';
 import { StatsExportButtons } from './stats-export-buttons';
 import { useStatsQuery } from '../api/use-stats';
 import type { StatsFilters } from '../types';
+import { DemoBanner } from '@/components/demo-banner';
+import { mockStatsResponse } from '@/data/mockData';
 
 function getDefaultFilters(): StatsFilters {
   const now = new Date();
@@ -26,10 +28,10 @@ function getDefaultFilters(): StatsFilters {
 
 export function StatsDashboard() {
   const { t } = useTranslation();
-  const { user } = useAuth();
+  const { user, isDemoMode } = useAuth();
   const [filters, setFilters] = useState<StatsFilters>(getDefaultFilters);
 
-  // Fetch tracker projects for the filter dropdown
+  // Fetch tracker projects for the filter dropdown (solo si hay usuario real)
   const projectsQuery = useQuery({
     queryKey: ['tracker-projects-for-stats'],
     queryFn: apiGetProjects,
@@ -37,9 +39,33 @@ export function StatsDashboard() {
     enabled: Boolean(user),
   });
 
-  // Fetch stats
+  // Fetch stats (solo si hay usuario real)
   const statsQuery = useStatsQuery(filters);
 
+  // ── Modo demo ─────────────────────────────────────────────────────────────
+  if (isDemoMode) {
+    return (
+      <div className="space-y-5">
+        <DemoBanner message="👀 Estadísticas de ejemplo. Inicia sesión para ver tus datos reales." />
+
+        <div className="flex items-center gap-3">
+          <BarChart2 className="h-6 w-6 text-primary" />
+          <div>
+            <h2 className="text-xl font-bold">{t('stats_title')}</h2>
+            <p className="text-sm text-muted-foreground">{t('stats_subtitle')}</p>
+          </div>
+        </div>
+
+        <StatsMetricCards summary={mockStatsResponse.summary} />
+        <StatsCharts
+          timeSeries={mockStatsResponse.timeSeries}
+          byProject={mockStatsResponse.byProject}
+        />
+      </div>
+    );
+  }
+
+  // ── Sin sesión ───────────────────────────────────────────────────────────
   if (!user) {
     return (
       <div className="flex flex-col items-center justify-center gap-4 py-24 text-muted-foreground">
@@ -49,9 +75,9 @@ export function StatsDashboard() {
     );
   }
 
+  // ── Datos reales ─────────────────────────────────────────────────────────
   return (
     <div className="space-y-5">
-      {/* Hero header */}
       <div className="flex items-center gap-3">
         <BarChart2 className="h-6 w-6 text-primary" />
         <div>
@@ -60,28 +86,24 @@ export function StatsDashboard() {
         </div>
       </div>
 
-      {/* Filter bar */}
       <StatsFilterBar
         filters={filters}
         onFiltersChange={setFilters}
         projects={projectsQuery.data ?? []}
       />
 
-      {/* Loading state */}
       {statsQuery.isLoading && (
         <div className="flex items-center justify-center py-16">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
       )}
 
-      {/* Error state */}
       {statsQuery.isError && !statsQuery.isLoading && (
         <div className="rounded-xl border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
           {t('stats_error_load')}: {statsQuery.error?.message}
         </div>
       )}
 
-      {/* Empty state */}
       {statsQuery.isSuccess && statsQuery.data.summary.totalPieces === 0 && (
         <div className="flex flex-col items-center justify-center gap-4 rounded-xl border border-border/60 bg-card/50 py-20">
           <BarChart2 className="h-10 w-10 opacity-20" />
@@ -89,19 +111,13 @@ export function StatsDashboard() {
         </div>
       )}
 
-      {/* Data loaded */}
       {statsQuery.isSuccess && statsQuery.data.summary.totalPieces > 0 && (
         <>
-          {/* Metric cards */}
           <StatsMetricCards summary={statsQuery.data.summary} />
-
-          {/* Charts */}
           <StatsCharts
             timeSeries={statsQuery.data.timeSeries}
             byProject={statsQuery.data.byProject}
           />
-
-          {/* Export */}
           <div className="flex items-center justify-between flex-wrap gap-2">
             <p className="text-xs text-muted-foreground">{t('stats_export_label')}</p>
             <StatsExportButtons
