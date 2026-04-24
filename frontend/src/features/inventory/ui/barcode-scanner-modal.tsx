@@ -58,6 +58,7 @@ interface BarcodeScannerModalProps {
 }
 
 const READER_ID = 'filamentos-qr-reader';
+const IS_IOS = /iPad|iPhone|iPod/.test(typeof navigator !== 'undefined' ? navigator.userAgent : '');
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -77,6 +78,7 @@ export function BarcodeScannerModal({ open, onClose, onFill }: BarcodeScannerMod
   const [lookupState, setLookupState] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
   const [lookupError, setLookupError] = useState('');
   const [result, setResult] = useState<(LookupResult & { rawCode: string }) | null>(null);
+  const [cameraReady, setCameraReady] = useState(false);
 
   // ── Stop camera utility ────────────────────────────────────────────────────
   const stopCamera = useCallback(async () => {
@@ -88,6 +90,7 @@ export function BarcodeScannerModal({ open, onClose, onFill }: BarcodeScannerMod
       }
     }
     setCameraActive(false);
+    setCameraReady(false);
   }, []);
 
   // ── Cleanup on modal close ─────────────────────────────────────────────────
@@ -98,6 +101,7 @@ export function BarcodeScannerModal({ open, onClose, onFill }: BarcodeScannerMod
       setLookupState('idle');
       setLookupError('');
       setCameraError('');
+      setCameraReady(false);
     }
   }, [open, stopCamera]);
 
@@ -134,13 +138,38 @@ export function BarcodeScannerModal({ open, onClose, onFill }: BarcodeScannerMod
     await new Promise((r) => setTimeout(r, 100));
 
     try {
+      if (!window.isSecureContext) {
+        setCameraError(t('scan_ios_hint'));
+        return;
+      }
+
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setCameraError(t('scan_camera_error'));
+        return;
+      }
+
+      const permissionStream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: IS_IOS ? 'environment' : { ideal: 'environment' },
+        },
+        audio: false,
+      });
+      permissionStream.getTracks().forEach((track) => track.stop());
+
       if (!scannerRef.current) {
         scannerRef.current = new Html5Qrcode(READER_ID, { verbose: false });
       }
 
+      setCameraReady(true);
+
       await scannerRef.current.start(
-        { facingMode: 'environment' },
-        { fps: 10, qrbox: { width: 250, height: 250 } },
+        { facingMode: IS_IOS ? 'environment' : { ideal: 'environment' } },
+        {
+          fps: IS_IOS ? 6 : 10,
+          qrbox: { width: 220, height: 220 },
+          aspectRatio: 1,
+          disableFlip: false,
+        },
         (decodedText) => {
           void handleCodeDetected(decodedText);
         },
@@ -149,7 +178,7 @@ export function BarcodeScannerModal({ open, onClose, onFill }: BarcodeScannerMod
       setCameraActive(true);
     } catch (err) {
       const msg = err instanceof Error ? err.message : '';
-      if (msg.toLowerCase().includes('https') || msg.toLowerCase().includes('secure')) {
+      if (msg.toLowerCase().includes('https') || msg.toLowerCase().includes('secure') || msg.toLowerCase().includes('permission')) {
         setCameraError(t('scan_ios_hint'));
       } else {
         setCameraError(t('scan_camera_error'));
@@ -197,6 +226,13 @@ export function BarcodeScannerModal({ open, onClose, onFill }: BarcodeScannerMod
             cameraActive ? 'min-h-[280px]' : 'hidden'
           }`}
         />
+
+        {cameraActive && !cameraReady && (
+          <div className="flex items-center justify-center gap-2 py-3 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            {t('scan_scanning')}
+          </div>
+        )}
 
         {/* Camera controls */}
         {!cameraActive && lookupState === 'idle' && (

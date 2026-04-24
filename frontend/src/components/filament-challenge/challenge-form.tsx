@@ -3,23 +3,80 @@ import { useForm } from 'react-hook-form';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn, generateId } from '@/lib/utils';
 import { parseTimeBlock, secsToString, formatCost } from './filament-storage';
 import { getTrackerSuccessMessage } from './tracker-messages';
-import type { EditingState, FilamentPiece, FilamentProject, PieceFilamentInput } from './filament-types';
+import type { EditingState, FilamentPiece, FilamentProject, PieceFilamentInput, PieceMaterialInput } from './filament-types';
 import type { PieceInput } from './use-filament-storage';
 import { useTranslation } from 'react-i18next';
 import type { Spool } from '@/features/inventory/types';
-import { Plus, Trash2, X, UploadCloud, Loader2, Box } from 'lucide-react';
+import { Plus, Trash2, X, UploadCloud, Loader2, Box, ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react';
 import { analyzeGcodeFile } from '@/features/calculator/api/analyze-gcode';
 import { Import3MFModal, type Import3MFResult } from '@/components/import-3mf-modal';
+
+const trackerSelectClassName = 'h-10 w-full rounded-[12px] border border-border/60 bg-card/80 px-3 text-sm font-medium text-foreground shadow-sm ring-offset-background transition focus:ring-2 focus:ring-primary/20 focus:ring-offset-0 dark:border-white/[0.10] dark:bg-white/[0.04]';
+const trackerDateButtonClassName = 'challenge-input flex h-10 w-full items-center justify-between rounded-[12px] border border-border/60 bg-card/80 px-3 py-2 text-sm font-medium text-foreground shadow-sm outline-none transition focus:border-primary/60 focus:ring-2 focus:ring-primary/20 dark:border-white/[0.10] dark:bg-white/[0.04]';
+
+function formatDateLabel(value: string | null, locale: string): string {
+  if (!value) return 'Seleccionar fecha';
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return 'Seleccionar fecha';
+  return new Intl.DateTimeFormat(locale || 'es-ES', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  }).format(date);
+}
+
+function getCalendarMatrix(monthDate: Date) {
+  const start = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
+  const end = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0);
+  const startDay = (start.getDay() + 6) % 7;
+  const daysInMonth = end.getDate();
+  const cells: Array<Date | null> = [];
+
+  for (let i = 0; i < startDay; i++) cells.push(null);
+  for (let day = 1; day <= daysInMonth; day++) {
+    cells.push(new Date(monthDate.getFullYear(), monthDate.getMonth(), day));
+  }
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  const weeks: Array<Array<Date | null>> = [];
+  for (let i = 0; i < cells.length; i += 7) {
+    weeks.push(cells.slice(i, i + 7));
+  }
+  return weeks;
+}
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
 interface FormValues {
   label: string;
   name: string;
-  timeText: string;
+  timeHours: string;
+  timeMinutes: string;
+  notes: string;
+  status: 'pending' | 'printed' | 'post_processed' | 'delivered' | 'failed';
+  printedAt: string;
+  incident: string;
+}
+
+interface MaterialRow {
+  key: string;
+  name: string;
+  quantity: string;
+  cost: string;
+}
+
+function emptyMaterialRow(): MaterialRow {
+  return {
+    key: generateId(),
+    name: '',
+    quantity: '',
+    cost: '',
+  };
 }
 
 interface FilamentRow {
@@ -31,6 +88,7 @@ interface FilamentRow {
   brand: string;
   material: string;
   grams: string;          // string for input control
+  spoolPrice: string;
 }
 
 function emptyRow(): FilamentRow {
@@ -43,6 +101,7 @@ function emptyRow(): FilamentRow {
     brand: '',
     material: '',
     grams: '',
+    spoolPrice: '20',
   };
 }
 
@@ -90,13 +149,12 @@ interface FilamentRowProps {
   index: number;
   canDelete: boolean;
   activeSpools: Spool[];
-  pricePerKg: number;
   currency: string;
   onChange: (key: string, patch: Partial<FilamentRow>) => void;
   onDelete: (key: string) => void;
 }
 
-function FilamentRowInput({ row, index, canDelete, activeSpools, pricePerKg, currency, onChange, onDelete }: FilamentRowProps) {
+function FilamentRowInput({ row, index, canDelete, activeSpools, currency, onChange, onDelete }: FilamentRowProps) {
   const { t } = useTranslation();
 
   const grams = parseFloat(row.grams) || 0;
@@ -108,16 +166,15 @@ function FilamentRowInput({ row, index, canDelete, activeSpools, pricePerKg, cur
       const spool = activeSpools.find((s) => s.id === row.spoolId);
       if (spool && spool.totalGrams > 0) {
         rowCost = grams * (spool.price / spool.totalGrams);
-      } else {
-        rowCost = grams * (pricePerKg / 1000);
       }
     } else {
-      rowCost = grams * (pricePerKg / 1000);
+      const manualPrice = parseFloat(row.spoolPrice) || 20;
+      rowCost = grams * (manualPrice / 1000);
     }
   }
 
   function handleSpoolChange(spoolId: string) {
-    if (!spoolId) {
+    if (!spoolId || spoolId === '__none__') {
       onChange(row.key, { spoolId: '', mode: 'spool' });
       return;
     }
@@ -187,18 +244,19 @@ function FilamentRowInput({ row, index, canDelete, activeSpools, pricePerKg, cur
           <Label className="text-[0.72rem] font-bold uppercase tracking-wider text-muted-foreground">
             {t('tracker.filaments.spool')}
           </Label>
-          <select
-            value={row.spoolId}
-            onChange={(e) => handleSpoolChange(e.target.value)}
-            className="challenge-input w-full rounded-[10px] border border-white/[0.10] bg-transparent px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-          >
-            <option value="">{t('tracker.complete.noSpool')}</option>
-            {activeSpools.map((spool) => (
-              <option key={spool.id} value={spool.id}>
-                {spool.brand} · {spool.material} · {spool.color} ({spool.remainingG.toFixed(0)} g restantes)
-              </option>
-            ))}
-          </select>
+          <Select value={row.spoolId} onValueChange={handleSpoolChange}>
+            <SelectTrigger className={trackerSelectClassName}>
+              <SelectValue placeholder={t('tracker.complete.noSpool')} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__none__">{t('tracker.complete.noSpool')}</SelectItem>
+              {activeSpools.map((spool) => (
+                <SelectItem key={spool.id} value={spool.id}>
+                  {spool.brand} · {spool.material} · {spool.color} ({spool.remainingG.toFixed(0)} g restantes)
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       )}
 
@@ -258,6 +316,22 @@ function FilamentRowInput({ row, index, canDelete, activeSpools, pricePerKg, cur
               className="challenge-input h-8 text-sm"
             />
           </div>
+          <div className="space-y-1 col-span-2">
+            <Label className="text-[0.72rem] font-bold uppercase tracking-wider text-muted-foreground">
+              {t('tracker.filaments.manualPrice')}
+            </Label>
+            <div className="relative">
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
+                value={row.spoolPrice}
+                onChange={(e) => onChange(row.key, { spoolPrice: e.target.value || '20' })}
+                className="challenge-input h-8 text-sm pr-8"
+              />
+              <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[0.72rem] text-muted-foreground pointer-events-none">{currency}</span>
+            </div>
+          </div>
         </div>
       )}
 
@@ -316,7 +390,7 @@ export function ChallengeForm({
   const isEditing = editingState.mode === 'edit';
 
   const { register, handleSubmit, watch, reset, setValue, setError, formState: { errors } } =
-    useForm<FormValues>({ defaultValues: { label: '', name: '', timeText: '' } });
+    useForm<FormValues>({ defaultValues: { label: '', name: '', timeHours: '0', timeMinutes: '0', notes: '', status: 'printed', printedAt: '', incident: '' } });
 
   const [successMsg, setSuccessMsg]               = useState('');
   const [milestoneUnlocked, setMilestoneUnlocked] = useState<number | null>(null);
@@ -324,7 +398,11 @@ export function ChallengeForm({
   const [imageError, setImageError]               = useState('');
   const [filamentRows, setFilamentRows]           = useState<FilamentRow[]>([emptyRow()]);
   const [filamentError, setFilamentError]         = useState('');
+  const [materialRows, setMaterialRows]           = useState<MaterialRow[]>([]);
+  const [calendarOpen, setCalendarOpen]           = useState(false);
+  const [calendarMonth, setCalendarMonth]         = useState(() => new Date());
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const calendarRef = useRef<HTMLDivElement>(null);
 
   // ── G-code / 3MF auto-fill ─────────────────────────────────────────────────
   const gcodeFileInputRef = useRef<HTMLInputElement>(null);
@@ -333,31 +411,55 @@ export function ChallengeForm({
   type FeedbackKind = 'idle' | 'success' | 'partial' | 'error';
   const [gcodeStatus, setGcodeStatus] = useState<{ kind: FeedbackKind; message?: string }>({ kind: 'idle' });
 
-  const timeText = watch('timeText') ?? '';
-  const previewTime = parseTimeBlock(timeText);
+  const timeHours = watch('timeHours') ?? '0';
+  const timeMinutes = watch('timeMinutes') ?? '0';
+  const printedAt = watch('printedAt') || '';
+  const derivedTimeText = `${parseInt(timeHours || '0', 10) || 0}h ${parseInt(timeMinutes || '0', 10) || 0}m 0s`;
+  const previewTime = parseTimeBlock(derivedTimeText);
+  const calendarWeeks = getCalendarMatrix(calendarMonth);
+  const todayIso = (() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  })();
+
+  useEffect(() => {
+    if (!calendarOpen) return;
+
+    function handleClickOutside(event: MouseEvent) {
+      if (calendarRef.current && !calendarRef.current.contains(event.target as Node)) {
+        setCalendarOpen(false);
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [calendarOpen]);
 
   // Total grams and cost from filament rows
   const totalGrams = filamentRows.reduce((s, r) => s + (parseFloat(r.grams) || 0), 0);
-  const totalCost  = filamentRows.reduce((s, r) => {
-    const g = parseFloat(r.grams) || 0;
-    if (g === 0) return s;
-    if (r.mode === 'spool' && r.spoolId) {
-      const spool = activeSpools.find((sp) => sp.id === r.spoolId);
-      if (spool && spool.totalGrams > 0) return s + g * (spool.price / spool.totalGrams);
-    }
-    return s + g * (project.pricePerKg / 1000);
-  }, 0);
+    const totalCost  = filamentRows.reduce((s, r) => {
+      const g = parseFloat(r.grams) || 0;
+      if (g === 0) return s;
+      if (r.mode === 'spool' && r.spoolId) {
+        const spool = activeSpools.find((sp) => sp.id === r.spoolId);
+        if (spool && spool.totalGrams > 0) return s + g * (spool.price / spool.totalGrams);
+        return s;
+      }
+      return s + g * ((parseFloat(r.spoolPrice) || 20) / 1000);
+    }, 0);
+  const totalMaterialCost = materialRows.reduce((sum, row) => sum + (parseFloat(row.cost) || 0), 0);
 
   // ── Reset helpers ──────────────────────────────────────────────────────────
 
   function resetForm() {
-    reset({ label: '', name: '', timeText: '' });
+    reset({ label: '', name: '', timeHours: '0', timeMinutes: '0', notes: '', status: 'printed', printedAt: '', incident: '' });
     setImagePreview(null);
     setImageError('');
     setSuccessMsg('');
     setMilestoneUnlocked(null);
     setFilamentRows([emptyRow()]);
     setFilamentError('');
+    setMaterialRows([]);
     setGcodeStatus({ kind: 'idle' });
     if (fileInputRef.current) fileInputRef.current.value = '';
   }
@@ -377,7 +479,11 @@ export function ChallengeForm({
       const weightGrams = res.data?.filamentWeightGrams  ?? 0;
 
       if (totalSecs > 0) {
-        setValue('timeText', secsToString(totalSecs));
+        const h = Math.floor(totalSecs / 3600);
+        const m = Math.floor((totalSecs % 3600) / 60);
+        const s = totalSecs % 60;
+        setValue('timeHours', String(h));
+        setValue('timeMinutes', String(m));
       }
       if (weightGrams > 0) {
         setFilamentRows((prev) =>
@@ -410,7 +516,8 @@ export function ChallengeForm({
     const totalMin = result.printTimeMinutes;
     const h = Math.floor(totalMin / 60);
     const m = totalMin % 60;
-    setValue('timeText', `${h}h ${m}m 0s`);
+    setValue('timeHours', String(h));
+    setValue('timeMinutes', String(m));
 
     // Map filament rows
     if (result.filaments.length > 0) {
@@ -436,7 +543,20 @@ export function ChallengeForm({
       if (piece) {
         setValue('label',    piece.label);
         setValue('name',     piece.name);
-        setValue('timeText', piece.timeText);
+        const parsed = parseTimeBlock(piece.timeText);
+        const h = Math.floor(parsed.totalSecs / 3600);
+        const m = Math.floor((parsed.totalSecs % 3600) / 60);
+        const s = parsed.totalSecs % 60;
+        setValue('timeHours', String(h));
+        setValue('timeMinutes', String(m));
+        setValue('notes', piece.notes ?? '');
+        setValue('status', piece.status ?? 'printed');
+        setValue('printedAt', piece.printedAt ? piece.printedAt.slice(0, 10) : '');
+        if (piece.printedAt) {
+          const date = new Date(`${piece.printedAt.slice(0, 10)}T00:00:00`);
+          if (!Number.isNaN(date.getTime())) setCalendarMonth(date);
+        }
+        setValue('incident', piece.incident ?? '');
         setImagePreview(piece.imageUrl ?? null);
         setImageError('');
         setSuccessMsg('');
@@ -453,6 +573,7 @@ export function ChallengeForm({
             brand: f.brand,
             material: f.material,
             grams: String(f.grams),
+            spoolPrice: String(f.spoolPrice ?? 20),
           })));
         } else {
           // Legacy piece: create one manual row from totalGrams
@@ -473,8 +594,20 @@ export function ChallengeForm({
             mode: piece.spoolId ? 'spool' : 'manual',
             spoolId: piece.spoolId ?? '',
             grams: String(piece.totalGrams),
+            spoolPrice: '20',
           }]);
         }
+
+        setMaterialRows(
+          piece.materials?.length
+            ? piece.materials.map((m) => ({
+                key: m.id,
+                name: m.name,
+                quantity: String(m.quantity),
+                cost: String(m.cost),
+              }))
+            : [],
+        );
       }
     }
   }, [editingState, pieces, setValue, activeSpools]);
@@ -494,6 +627,26 @@ export function ChallengeForm({
 
   function handleAddRow() {
     setFilamentRows((prev) => [...prev, emptyRow()]);
+  }
+
+  function handleMaterialChange(key: string, patch: Partial<MaterialRow>) {
+    setMaterialRows((prev) => prev.map((row) => (row.key === key ? { ...row, ...patch } : row)));
+  }
+
+  function handleAddMaterial() {
+    setMaterialRows((prev) => [...prev, emptyMaterialRow()]);
+  }
+
+  function handleSelectDate(date: Date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    setValue('printedAt', `${year}-${month}-${day}`);
+    setCalendarOpen(false);
+  }
+
+  function handleDeleteMaterial(key: string) {
+    setMaterialRows((prev) => prev.filter((row) => row.key !== key));
   }
 
   // ── Image ──────────────────────────────────────────────────────────────────
@@ -519,8 +672,9 @@ export function ChallengeForm({
     if (!values.label.trim()) { setError('label',    { message: t('form_err_label') }); return; }
     if (!values.name.trim())  { setError('name',     { message: t('form_err_name')  }); return; }
 
-    const time = parseTimeBlock(values.timeText);
-    if (time.validLines === 0) { setError('timeText', { message: t('form_err_time') }); return; }
+    const timeText = `${parseInt(values.timeHours || '0', 10) || 0}h ${parseInt(values.timeMinutes || '0', 10) || 0}m 0s`;
+    const time = parseTimeBlock(timeText);
+    if (time.validLines === 0) { setError('timeHours', { message: t('form_err_time') }); return; }
 
     // Validate filament rows
     const validRows = filamentRows.filter((r) => parseFloat(r.grams) > 0);
@@ -536,7 +690,16 @@ export function ChallengeForm({
       brand:     r.brand,
       material:  r.material,
       grams:     parseFloat(r.grams),
+      spoolPrice: r.mode === 'manual' ? (parseFloat(r.spoolPrice) || 20) : undefined,
     }));
+
+    const materials: PieceMaterialInput[] = materialRows
+      .map((row) => ({
+        name: row.name.trim(),
+        quantity: parseFloat(row.quantity) || 0,
+        cost: parseFloat(row.cost) || 0,
+      }))
+      .filter((row) => row.name.length > 0);
 
     const gramTotal = filaments.reduce((s, f) => s + f.grams, 0);
 
@@ -545,10 +708,15 @@ export function ChallengeForm({
     const input: PieceInput = {
       label:     values.label.trim(),
       name:      values.name.trim(),
-      timeText:  values.timeText,
+      timeText,
       gramText:  String(gramTotal),
       imageUrl:  imagePreview ?? null,
+      notes:     values.notes.trim(),
+      status:    values.status,
+      printedAt: values.printedAt || null,
+      incident:  values.incident.trim(),
       filaments,
+      materials,
     };
 
     if (isEditing && editingId) {
@@ -596,6 +764,106 @@ export function ChallengeForm({
             </Label>
             <Input id="ch-name" placeholder={t('form_name_placeholder')} className="challenge-input" {...register('name')} />
             {errors.name && <p className="text-xs font-semibold text-destructive">{errors.name.message}</p>}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label htmlFor="ch-status" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+              {t('tracker.status.title')}
+            </Label>
+            <Select value={watch('status')} onValueChange={(value) => setValue('status', value as FormValues['status'])}>
+              <SelectTrigger className={trackerSelectClassName}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="pending">{t('tracker.status.pending')}</SelectItem>
+                <SelectItem value="printed">{t('tracker.status.printed')}</SelectItem>
+                <SelectItem value="post_processed">{t('tracker.status.postProcessed')}</SelectItem>
+                <SelectItem value="delivered">{t('tracker.status.delivered')}</SelectItem>
+                <SelectItem value="failed">{t('tracker.status.failed')}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="ch-printed-at" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+              {t('tracker.printDate.title')}
+            </Label>
+            <div className="relative" ref={calendarRef}>
+              <button
+                id="ch-printed-at"
+                type="button"
+                className={trackerDateButtonClassName}
+                onClick={() => setCalendarOpen((open) => !open)}
+              >
+                <span className={cn(!printedAt && 'text-muted-foreground')}>
+                  {formatDateLabel(printedAt || null, 'es-ES')}
+                </span>
+                <CalendarDays className="h-4 w-4 text-muted-foreground" />
+              </button>
+
+              {calendarOpen && (
+                <div className="absolute z-50 mt-2 w-full max-w-[280px] rounded-[16px] border border-border/60 bg-card/95 p-3 shadow-2xl backdrop-blur-md dark:border-white/[0.10] dark:bg-[#121826]/95">
+                  <div className="mb-2 flex items-center justify-between">
+                    <button type="button" className="rounded-full border border-border/60 p-1.5 hover:bg-accent dark:border-white/[0.10]" onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1))}>
+                      <ChevronLeft className="h-3.5 w-3.5" />
+                    </button>
+                    <p className="text-xs font-bold text-foreground capitalize">
+                      {new Intl.DateTimeFormat('es-ES', { month: 'long', year: 'numeric' }).format(calendarMonth)}
+                    </p>
+                    <button type="button" className="rounded-full border border-border/60 p-1.5 hover:bg-accent dark:border-white/[0.10]" onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1))}>
+                      <ChevronRight className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+
+                  <div className="mb-1 grid grid-cols-7 text-center text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                    {['L', 'M', 'X', 'J', 'V', 'S', 'D'].map((day) => <div key={day}>{day}</div>)}
+                  </div>
+
+                  <div className="space-y-1">
+                    {calendarWeeks.map((week, index) => (
+                      <div key={index} className="grid grid-cols-7 gap-1">
+                        {week.map((date, cellIndex) => {
+                          const iso = date
+                            ? `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+                            : null;
+                          const isSelected = iso === printedAt;
+                          const isToday = iso === todayIso;
+                          return date ? (
+                            <button
+                              key={cellIndex}
+                              type="button"
+                              onClick={() => handleSelectDate(date)}
+                              className={cn(
+                                'flex h-8 items-center justify-center rounded-[9px] text-xs font-semibold transition-colors',
+                                isSelected
+                                  ? 'bg-primary text-primary-foreground shadow'
+                                  : isToday
+                                    ? 'border border-primary/40 bg-primary/10 text-foreground hover:bg-primary/15'
+                                    : 'hover:bg-accent text-foreground'
+                              )}
+                            >
+                              {date.getDate()}
+                            </button>
+                          ) : (
+                            <div key={cellIndex} className="h-9" />
+                          );
+                        })}
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="mt-3 flex justify-between gap-2">
+                    <Button type="button" variant="outline" size="sm" className="rounded-full px-3 text-[11px]" onClick={() => setValue('printedAt', '')}>
+                      Limpiar
+                    </Button>
+                    <Button type="button" variant="outline" size="sm" className="rounded-full px-3 text-[11px]" onClick={() => setCalendarOpen(false)}>
+                      Cerrar
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -654,9 +922,22 @@ export function ChallengeForm({
         <div className="space-y-1.5">
           <Label htmlFor="ch-time" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
             {t('form_time')}
-          </Label>          <Input id="ch-time" placeholder={t('form_time_placeholder')} className="challenge-input" {...register('timeText')} />
-          <p className="text-[0.8rem] text-muted-foreground">{t('form_time_hint')}</p>
-          {errors.timeText && <p className="text-xs font-semibold text-destructive">{errors.timeText.message}</p>}
+          </Label>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-1">
+              <div className="relative">
+                <Input id="ch-time-hours" type="number" min="0" className="challenge-input pr-7 text-center" {...register('timeHours')} />
+                <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[0.72rem] text-muted-foreground pointer-events-none">h</span>
+              </div>
+            </div>
+            <div className="space-y-1">
+              <div className="relative">
+                <Input id="ch-time-minutes" type="number" min="0" className="challenge-input pr-7 text-center" {...register('timeMinutes')} />
+                <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[0.72rem] text-muted-foreground pointer-events-none">m</span>
+              </div>
+            </div>
+          </div>
+          {errors.timeHours && <p className="text-xs font-semibold text-destructive">{errors.timeHours.message}</p>}
         </div>
 
         {/* ── Filaments section ─────────────────────────────────────────────── */}
@@ -680,7 +961,6 @@ export function ChallengeForm({
                 index={i}
                 canDelete={filamentRows.length > 1}
                 activeSpools={activeSpools}
-                pricePerKg={project.pricePerKg}
                 currency={project.currency}
                 onChange={handleRowChange}
                 onDelete={handleRowDelete}
@@ -704,13 +984,89 @@ export function ChallengeForm({
           )}
         </div>
 
+        <div className="space-y-2 rounded-[16px] border border-white/[0.08] bg-white/[0.02] p-3">
+          <div className="flex items-center justify-between">
+            <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+              {t('tracker.materials.title')}
+            </Label>
+            {totalMaterialCost > 0 && (
+              <span className="text-[0.72rem] font-semibold text-muted-foreground">
+                {formatCost(totalMaterialCost, project.currency)}
+              </span>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            {materialRows.map((row) => (
+              <div key={row.key} className="grid grid-cols-1 gap-2 rounded-[14px] border border-white/[0.08] bg-black/10 p-3 sm:grid-cols-[1.4fr_0.8fr_0.8fr_auto]">
+                <Input
+                  placeholder={t('tracker.materials.namePlaceholder')}
+                  value={row.name}
+                  onChange={(e) => handleMaterialChange(row.key, { name: e.target.value })}
+                  className="challenge-input h-9 text-sm"
+                />
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder={t('tracker.materials.quantityPlaceholder')}
+                  value={row.quantity}
+                  onChange={(e) => handleMaterialChange(row.key, { quantity: e.target.value })}
+                  className="challenge-input h-9 text-sm"
+                />
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder={t('tracker.materials.costPlaceholder')}
+                  value={row.cost}
+                  onChange={(e) => handleMaterialChange(row.key, { cost: e.target.value })}
+                  className="challenge-input h-9 text-sm"
+                />
+                <Button type="button" variant="outline" size="sm" className="rounded-full text-xs font-bold" onClick={() => handleDeleteMaterial(row.key)}>
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            ))}
+          </div>
+
+          <Button type="button" variant="outline" size="sm" className="rounded-full text-xs font-bold" onClick={handleAddMaterial}>
+            <Plus className="mr-1.5 h-3.5 w-3.5" />
+            {t('tracker.materials.add')}
+          </Button>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="ch-notes" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+            {t('tracker.notes.title')}
+          </Label>
+          <Textarea
+            id="ch-notes"
+            placeholder={t('tracker.notes.placeholder')}
+            className="challenge-input min-h-[110px]"
+            {...register('notes')}
+          />
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="ch-incident" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+            {t('tracker.incident.title')}
+          </Label>
+          <Textarea
+            id="ch-incident"
+            placeholder={t('tracker.incident.placeholder')}
+            className="challenge-input min-h-[90px]"
+            {...register('incident')}
+          />
+        </div>
+
         {/* Image upload */}
         <div className="space-y-2">
           <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
             {t('form_image')} <span className="normal-case font-normal">{t('form_image_optional')}</span>
           </Label>
           <div className="flex items-start gap-3">
-            {imagePreview ? (
+            {imagePreview && (
               <div className="relative shrink-0">
                 <img src={imagePreview} alt={t('cf_image_preview')} className="h-20 w-20 rounded-[14px] object-cover border border-white/[0.12]" />
                 <button
@@ -719,10 +1075,6 @@ export function ChallengeForm({
                   className="absolute -top-2 -right-2 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-[0.65rem] font-black text-white shadow-md"
                   aria-label={t('delete')}
                 >✕</button>
-              </div>
-            ) : (
-              <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-[14px] border border-dashed border-white/[0.18] bg-white/[0.03] text-muted-foreground">
-                <span className="text-2xl">📷</span>
               </div>
             )}
             <div className="flex flex-col gap-1.5">
@@ -740,13 +1092,13 @@ export function ChallengeForm({
         <div className="rounded-[18px] border border-yellow-400/20 bg-yellow-400/8 p-4">
           <p className="mb-1 text-[0.75rem] font-bold uppercase tracking-widest text-muted-foreground">{t('form_cost_preview')}</p>
           <div className="flex items-baseline gap-3">
-            <p className="text-lg font-black text-yellow-400">{formatCost(totalCost, project.currency)}</p>
+            <p className="text-lg font-black text-yellow-400">{formatCost(totalCost + totalMaterialCost, project.currency)}</p>
             {totalGrams > 0 && (
               <p className="text-[0.75rem] text-muted-foreground">{totalGrams.toFixed(1)} g</p>
             )}
           </div>
           <p className="mt-1 text-[0.75rem] text-muted-foreground">
-            {project.pricePerKg > 0 ? `${formatCost(project.pricePerKg, project.currency)}/kg (proyecto)` : t('form_no_price')}
+            {t('tracker.materials.costHint')}
           </p>
         </div>
 

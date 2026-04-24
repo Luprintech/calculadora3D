@@ -44,6 +44,17 @@ export function ChallengeHero({ project, pieces, onBack, onPrint, onEditProject,
   const { t } = useTranslation();
   const stats      = computeProjectStats(pieces, project);
   const isComplete = stats.totalPieces >= project.goal;
+  const byStatus = pieces.reduce(
+    (acc, piece) => {
+      if (piece.status === 'pending') acc.pending += 1;
+      if (piece.status === 'printed') acc.printed += 1;
+      if (piece.status === 'post_processed') acc.postProcessed += 1;
+      if (piece.status === 'delivered') acc.delivered += 1;
+      if (piece.status === 'failed') acc.failed += 1;
+      return acc;
+    },
+    { pending: 0, printed: 0, postProcessed: 0, delivered: 0, failed: 0 },
+  );
 
   return (
     <section className="challenge-hero relative mb-6 overflow-hidden rounded-[28px] border border-white/[0.10] p-6 sm:p-8">
@@ -114,6 +125,20 @@ export function ChallengeHero({ project, pieces, onBack, onPrint, onEditProject,
           value={`${stats.progressPct}%`}
           color="white"
         />
+      </div>
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        {[
+          { label: t('tracker.status.pending'), value: byStatus.pending },
+          { label: t('tracker.status.printed'), value: byStatus.printed },
+          { label: t('tracker.status.postProcessed'), value: byStatus.postProcessed },
+          { label: t('tracker.status.delivered'), value: byStatus.delivered },
+          { label: t('tracker.status.failed'), value: byStatus.failed },
+        ].map((item) => (
+          <div key={item.label} className="rounded-full border border-white/[0.08] bg-white/[0.04] px-3 py-1.5 text-xs font-bold text-foreground">
+            {item.label}: <span className="text-[hsl(var(--challenge-blue))]">{item.value}</span>
+          </div>
+        ))}
       </div>
 
       <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap">

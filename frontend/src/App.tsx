@@ -4,7 +4,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
   Youtube, Instagram, LogOut, Sun, Moon, Download,
-  Calculator as CalculatorIcon, BarChart3, LineChart, Package, FlaskConical, Info,
+  Calculator as CalculatorIcon, BarChart3, LineChart, Package, FlaskConical, Info, Menu, X,
 } from 'lucide-react';
 import { Loader2 } from 'lucide-react';
 import { useTheme } from 'next-themes';
@@ -101,6 +101,7 @@ function AppShell() {
   const [isDevMode, setIsDevMode] = React.useState(false);
   const [devLoading, setDevLoading] = React.useState(false);
   const [aboutOpen, setAboutOpen] = React.useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
 
   React.useEffect(() => {
     fetch('/api/dev/ping', { credentials: 'include' })
@@ -137,7 +138,7 @@ function AppShell() {
           transition={{ duration: 0.4 }}
           className="mb-8 rounded-2xl border border-border/70 bg-card/95 p-4 shadow-[0_12px_36px_rgba(2,8,23,0.10)] backdrop-blur-md print:hidden dark:border-white/10 dark:bg-card/70 dark:shadow-[0_18px_60px_rgba(0,0,0,0.22)] sm:p-5"
         >
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-3">
             {/* Logo y título */}
             <div className="flex items-center gap-3">
               <img
@@ -161,8 +162,7 @@ function AppShell() {
               </div>
             </div>
 
-            {/* Botones: solo iconos siempre */}
-            <div className="flex items-center gap-1.5 sm:gap-2">
+            <div className="hidden items-center gap-1.5 sm:gap-2 md:flex">
               {canInstall && (
                 <Button variant="outline" size="icon" onClick={install} title={t('install_title')}>
                   <Download className="h-4 w-4" />
@@ -238,7 +238,97 @@ function AppShell() {
                 </>
               )}
             </div>
+
+            <Button
+              variant="outline"
+              size="icon"
+              className="md:hidden"
+              aria-label={mobileMenuOpen ? 'Cerrar menu' : 'Abrir menu'}
+              onClick={() => setMobileMenuOpen((open) => !open)}
+            >
+              {mobileMenuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+            </Button>
           </div>
+
+          {mobileMenuOpen && (
+            <div className="mt-4 border-t border-border/60 pt-4 md:hidden">
+              <div className="mx-auto flex max-w-sm flex-col items-center gap-4 text-center">
+                <div className="grid w-full grid-cols-3 place-items-center gap-3">
+                  <div className="flex w-full justify-center"><ThemeToggle /></div>
+                  <div className="flex w-full justify-center"><LanguageSelector /></div>
+                  <div className="flex w-full justify-center"><CurrencySelector /></div>
+                </div>
+
+                <div className={`grid w-full gap-2 ${canInstall ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                  {canInstall && (
+                    <Button variant="outline" onClick={install} className="rounded-full font-bold">
+                      <Download className="mr-2 h-4 w-4" />
+                      {t('install_title')}
+                    </Button>
+                  )}
+                  <Button variant="outline" onClick={() => setAboutOpen(true)} className="rounded-full font-bold">
+                    <Info className="mr-2 h-4 w-4" />
+                    Info
+                  </Button>
+                </div>
+
+                {user ? (
+                  <div className="flex w-full flex-col items-center gap-3 rounded-2xl border border-border/60 bg-background/60 px-4 py-4 text-center">
+                    {avatarUrl && (
+                      <Avatar className="h-12 w-12">
+                        <AvatarImage src={avatarUrl} alt={displayName} />
+                        <AvatarFallback>{initials}</AvatarFallback>
+                      </Avatar>
+                    )}
+                    <div className="min-w-0 w-full">
+                      <p className="truncate text-sm font-bold text-foreground">{displayName}</p>
+                      <p className="truncate text-xs text-muted-foreground">{t('welcome', { name: displayName })}</p>
+                    </div>
+                    <Button
+                      onClick={logout}
+                      variant="outline"
+                      className="w-full rounded-full font-bold"
+                    >
+                      <LogOut className="mr-2 h-4 w-4" />
+                      {t('sign_out')}
+                    </Button>
+                  </div>
+                ) : isGuest ? (
+                  <div className="flex flex-col gap-2">
+                    <Button onClick={loginWithGoogle} variant="outline" className="w-full rounded-full font-bold">
+                      {t('sign_in')}
+                    </Button>
+                    <Button
+                      onClick={() => { void exitGuest().then(() => { window.location.href = '/'; }); }}
+                      variant="ghost"
+                      className="w-full rounded-full font-bold"
+                    >
+                      <LogOut className="mr-2 h-4 w-4" />
+                      Salir del modo invitado
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    <Button onClick={loginWithGoogle} variant="outline" className="w-full rounded-full font-bold">
+                      {t('sign_in')}
+                    </Button>
+                    {isDevMode && (
+                      <Button
+                        onClick={handleDevLogin}
+                        disabled={devLoading}
+                        variant="outline"
+                        className="w-full rounded-full border-dashed border-yellow-500/60 font-bold text-yellow-500 hover:bg-yellow-500/10 hover:text-yellow-400"
+                      >
+                        {devLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FlaskConical className="mr-2 h-4 w-4" />}
+                        Dev Login
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {isGuest && (
             <div className="mt-4 rounded-2xl border border-purple-300/40 bg-gradient-to-r from-purple-500/12 via-fuchsia-500/10 to-indigo-500/12 px-4 py-3 text-sm font-semibold text-purple-800 dark:text-purple-200">
               Estás en modo invitado. Crea una cuenta gratuita para guardar tus proyectos.

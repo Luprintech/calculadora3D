@@ -23,9 +23,14 @@ export interface PieceInput {
   timeText: string;
   gramText: string;
   imageUrl?: string | null;
+  notes?: string;
+  status?: 'pending' | 'printed' | 'post_processed' | 'delivered' | 'failed';
+  printedAt?: string | null;
+  incident?: string;
   spoolId?: string | null;
   /** Filamentos multicolor (nuevo sistema) */
   filaments?: import('./filament-types').PieceFilamentInput[];
+  materials?: import('./filament-types').PieceMaterialInput[];
 }
 
 export interface FilamentStorageOptions {
@@ -183,6 +188,10 @@ export function useFilamentStorage({ authLoading, userId }: FilamentStorageOptio
       timeLines:  time.validLines,
       gramLines:  grams.validLines,
       imageUrl:   input.imageUrl ?? null,
+      notes:      input.notes ?? '',
+      status:     input.status ?? 'printed',
+      printedAt:  input.printedAt ?? null,
+      incident:   input.incident ?? '',
       // Filaments: populate from input if available (local-only, ids assigned by server on refresh)
       filaments:  (input.filaments ?? []).map((f, idx) => ({
         id: `optimistic-${idx}`,
@@ -193,6 +202,14 @@ export function useFilamentStorage({ authLoading, userId }: FilamentStorageOptio
         brand: f.brand,
         material: f.material,
         grams: f.grams,
+        spoolPrice: f.spoolPrice,
+      })),
+      materials: (input.materials ?? []).map((m, idx) => ({
+        id: `optimistic-material-${idx}`,
+        pieceId: id,
+        name: m.name,
+        quantity: m.quantity,
+        cost: m.cost,
       })),
     };
     setPieces((prev) => [...prev, piece]);
@@ -233,6 +250,10 @@ export function useFilamentStorage({ authLoading, userId }: FilamentStorageOptio
               timeLines: time.validLines,
               gramLines: grams.validLines,
               imageUrl: input.imageUrl ?? null,
+              notes: input.notes ?? '',
+              status: input.status ?? 'printed',
+              printedAt: input.printedAt ?? null,
+              incident: input.incident ?? '',
               // Map PieceFilamentInput[] → PieceFilament[] optimistically (ids won't match server, refresh reconciles)
               filaments: (input.filaments ?? []).map((f, idx) => ({
                 id: `optimistic-upd-${idx}`,
@@ -243,6 +264,14 @@ export function useFilamentStorage({ authLoading, userId }: FilamentStorageOptio
                 brand: f.brand,
                 material: f.material,
                 grams: f.grams,
+                spoolPrice: f.spoolPrice,
+              })),
+              materials: (input.materials ?? []).map((m, idx) => ({
+                id: `optimistic-material-upd-${idx}`,
+                pieceId: id,
+                name: m.name,
+                quantity: m.quantity,
+                cost: m.cost,
               })),
             }
           : p,

@@ -38,6 +38,21 @@ export interface PieceFilamentInput {
   brand: string;
   material: string;
   grams: number;
+  spoolPrice?: number;
+}
+
+export interface PieceMaterial {
+  id: string;
+  pieceId: string;
+  name: string;
+  quantity: number;
+  cost: number;
+}
+
+export interface PieceMaterialInput {
+  name: string;
+  quantity: number;
+  cost: number;
 }
 
 // ── Pieza ───────────────────────────────────────────────────────────────────────
@@ -60,10 +75,15 @@ export interface FilamentPiece {
   gramLines: number;
   /** Data URL (base64) de la imagen de la pieza, o null si no tiene */
   imageUrl: string | null;
+  notes: string;
+  status: 'pending' | 'printed' | 'post_processed' | 'delivered' | 'failed';
+  printedAt: string | null;
+  incident: string;
   /** ID de la bobina de inventario usada (legacy — usar filaments en su lugar) */
   spoolId?: string | null;
   /** Filamentos multicolor — vacío en piezas legacy */
   filaments: PieceFilament[];
+  materials: PieceMaterial[];
 }
 
 // ── Stats ────────────────────────────────────────────────────────────────────────

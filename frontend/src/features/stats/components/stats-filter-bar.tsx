@@ -72,6 +72,10 @@ export function StatsFilterBar({ filters, onFiltersChange, projects }: StatsFilt
     onFiltersChange({ ...filters, projectId: value });
   }
 
+  function handleStatusChange(value: string) {
+    onFiltersChange({ ...filters, status: value });
+  }
+
   function handleGranularityChange(value: string) {
     onFiltersChange({ ...filters, granularity: value as Granularity });
   }
@@ -94,7 +98,7 @@ export function StatsFilterBar({ filters, onFiltersChange, projects }: StatsFilt
       </div>
 
       {/* Custom date range + project + granularity */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs text-muted-foreground">{t('stats_filter_from')}</Label>
           <Input
@@ -137,6 +141,22 @@ export function StatsFilterBar({ filters, onFiltersChange, projects }: StatsFilt
               <SelectItem value="day">{t('stats_granularity_day')}</SelectItem>
               <SelectItem value="week">{t('stats_granularity_week')}</SelectItem>
               <SelectItem value="month">{t('stats_granularity_month')}</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs text-muted-foreground">{t('stats_filter_status')}</Label>
+          <Select value={filters.status} onValueChange={handleStatusChange}>
+            <SelectTrigger className="h-8 text-sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t('tracker.filter.all')}</SelectItem>
+              <SelectItem value="pending">{t('tracker.status.pending')}</SelectItem>
+              <SelectItem value="printed">{t('tracker.status.printed')}</SelectItem>
+              <SelectItem value="post_processed">{t('tracker.status.postProcessed')}</SelectItem>
+              <SelectItem value="delivered">{t('tracker.status.delivered')}</SelectItem>
+              <SelectItem value="failed">{t('tracker.status.failed')}</SelectItem>
             </SelectContent>
           </Select>
         </div>

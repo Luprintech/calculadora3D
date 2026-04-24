@@ -22,6 +22,15 @@ export interface TrackerPdfData {
     totalGrams: number;
     totalCost: number;
     imageUrl: string | null;
+    notes: string;
+    status: 'pending' | 'printed' | 'post_processed' | 'delivered' | 'failed';
+    printedAt: string | null;
+    incident: string;
+    materials: Array<{
+      name: string;
+      quantity: number;
+      cost: number;
+    }>;
   }>;
 }
 
@@ -82,7 +91,7 @@ export function useTrackerPdf() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `tracker-${variables.trackerData.projectTitle.replace(/[^a-zA-Z0-9]/g, '-')}.pdf`;
+      a.download = `bitacora-${variables.trackerData.projectTitle.replace(/[^a-zA-Z0-9]/g, '-')}.pdf`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -90,7 +99,7 @@ export function useTrackerPdf() {
 
       toast({
         title: 'PDF generado',
-        description: 'El PDF del tracker se ha descargado correctamente',
+        description: 'El PDF de la bitácora se ha descargado correctamente',
       });
     },
     onError: (error: Error) => {

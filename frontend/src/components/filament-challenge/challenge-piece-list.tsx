@@ -165,6 +165,17 @@ export function ChallengePieceList({
                   </span>
                 </div>
 
+                <div className="mb-3 flex flex-wrap gap-2 text-xs font-bold">
+                  <span className="rounded-full border border-white/[0.08] bg-white/[0.04] px-3 py-1.5 text-foreground">
+                    {t(`tracker.status.${piece.status === 'post_processed' ? 'postProcessed' : piece.status}` as const)}
+                  </span>
+                  {piece.printedAt && (
+                    <span className="rounded-full border border-white/[0.08] bg-white/[0.04] px-3 py-1.5 text-muted-foreground">
+                      {t('tracker.printDate.title')}: {piece.printedAt}
+                    </span>
+                  )}
+                </div>
+
                 <div className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
                   <div className="rounded-[16px] border border-white/[0.05] bg-black/15 p-3">
                     <p className="mb-1 text-[0.72rem] font-bold uppercase tracking-wider text-muted-foreground">{t('pieces_time')}</p>
@@ -181,6 +192,34 @@ export function ChallengePieceList({
                     </p>
                   </div>
                 </div>
+
+                {(piece.materials ?? []).length > 0 && (
+                  <div className="mb-3 rounded-[16px] border border-white/[0.05] bg-black/15 p-3">
+                    <p className="mb-2 text-[0.72rem] font-bold uppercase tracking-wider text-muted-foreground">{t('tracker.materials.title')}</p>
+                    <div className="space-y-1.5 text-sm text-foreground">
+                      {(piece.materials ?? []).map((material) => (
+                        <div key={material.id} className="flex flex-wrap items-center justify-between gap-2 rounded-[12px] border border-white/[0.06] bg-white/[0.03] px-3 py-2">
+                          <span className="font-semibold">{material.name}</span>
+                          <span className="text-muted-foreground">{material.quantity} x {formatCost(material.cost, project.currency)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {piece.notes && (
+                  <div className="mb-3 rounded-[16px] border border-white/[0.05] bg-black/15 p-3">
+                    <p className="mb-1 text-[0.72rem] font-bold uppercase tracking-wider text-muted-foreground">{t('tracker.notes.title')}</p>
+                    <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/90">{piece.notes}</p>
+                  </div>
+                )}
+
+                {piece.incident && (
+                  <div className="mb-3 rounded-[16px] border border-amber-400/20 bg-amber-400/5 p-3">
+                    <p className="mb-1 text-[0.72rem] font-bold uppercase tracking-wider text-muted-foreground">{t('tracker.incident.title')}</p>
+                    <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/90">{piece.incident}</p>
+                  </div>
+                )}
 
                 <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
                   <Button

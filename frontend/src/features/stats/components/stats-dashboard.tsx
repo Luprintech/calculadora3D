@@ -21,6 +21,7 @@ function getDefaultFilters(): StatsFilters {
     from,
     to,
     projectId: 'all',
+    status: 'all',
     granularity: 'month',
     preset: 'thisYear',
   };

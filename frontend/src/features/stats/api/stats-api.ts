@@ -11,6 +11,7 @@ export async function apiGetStats(filters: Omit<StatsFilters, 'preset'>): Promis
     from: filters.from,
     to: filters.to,
     projectId: filters.projectId,
+    status: filters.status,
     granularity: filters.granularity,
   });
 

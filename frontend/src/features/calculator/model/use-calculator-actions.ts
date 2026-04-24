@@ -195,7 +195,7 @@ export function useCalculatorActions({
     const file = event.target.files?.[0];
     if (!file) return;
 
-    const MAX_IMAGE_SIZE_KB = 500;
+    const MAX_IMAGE_SIZE_KB = 10 * 1024;
     if (file.size > MAX_IMAGE_SIZE_KB * 1024) {
       toast({
         variant: 'destructive',

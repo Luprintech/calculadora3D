@@ -25,7 +25,6 @@ interface ProjectFormValues {
   description: string;
   coverImage: string;
   goal: string;
-  pricePerKg: string;
   currency: string;
 }
 
@@ -41,7 +40,7 @@ export function ProjectForm({ defaultValues, onSubmit, onCancel, submitLabel }: 
   const { currency } = useCurrency();
   const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm<ProjectFormValues>({
     defaultValues: defaultValues ?? {
-      title: '', description: '', coverImage: '', goal: '30', pricePerKg: '20.00', currency,
+      title: '', description: '', coverImage: '', goal: '30', currency,
     },
   });
 
@@ -85,7 +84,7 @@ export function ProjectForm({ defaultValues, onSubmit, onCancel, submitLabel }: 
       description: values.description.trim(),
       coverImage:  values.coverImage.trim() || null,
       goal:        Math.max(1, parseInt(values.goal, 10) || 1),
-      pricePerKg:  parseFloat(values.pricePerKg.replace(',', '.')) || 0,
+      pricePerKg:  0,
       currency:    values.currency,
     });
   }
@@ -172,23 +171,6 @@ export function ProjectForm({ defaultValues, onSubmit, onCancel, submitLabel }: 
 
       {/* Hidden currency field — value comes from global CurrencySelector */}
       <input type="hidden" {...register('currency')} />
-
-      <div className="space-y-1.5">
-        <Label htmlFor="pm-price" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-          {t('pm_price_kg')}
-        </Label>
-        <Input
-          id="pm-price"
-          type="number"
-          step="0.01"
-          min={0}
-          placeholder="20.00"
-          {...register('pricePerKg')}
-        />
-        <p className="text-[0.78rem] text-muted-foreground">
-          {t('pm_price_kg_hint')}
-        </p>
-      </div>
 
       <div className="flex gap-2 pt-1">
         <Button type="submit" className="challenge-btn-primary rounded-full font-extrabold">

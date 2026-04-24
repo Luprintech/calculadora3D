@@ -614,6 +614,15 @@ export interface TrackerPdfData {
     totalGrams: number;
     totalCost: number;
     imageUrl: string | null;
+    notes: string;
+    status: 'pending' | 'printed' | 'post_processed' | 'delivered' | 'failed';
+    printedAt: string | null;
+    incident: string;
+    materials: Array<{
+      name: string;
+      quantity: number;
+      cost: number;
+    }>;
   }>;
 }
 
@@ -673,8 +682,15 @@ export function generateTrackerPdfHtml(
   // Helper para formatear números con moneda
   const formatCurrency = (amount: number) => `${amount.toFixed(2)} ${currencySymbol}`;
   const socialLinksHtml = renderSocialLinks(customization);
+  const statusLabelMap: Record<string, string> = {
+    pending: 'Pendiente',
+    printed: 'Impresa',
+    post_processed: 'Postprocesada',
+    delivered: 'Entregada',
+    failed: 'Fallida',
+  };
 
-  const progressPct = Math.min(100, Math.round((totalPieces / projectGoal) * 100));
+  const progressPct = projectGoal > 0 ? Math.min(100, Math.round((totalPieces / projectGoal) * 100)) : 0;
 
   return `
 <!DOCTYPE html>
@@ -683,7 +699,7 @@ export function generateTrackerPdfHtml(
   <base href="${safeBaseUrl}/" />
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tracker - ${projectTitle}</title>
+  <title>Bitacora de impresion - ${projectTitle}</title>
   <style>
     * {
       margin: 0;
@@ -847,6 +863,95 @@ export function generateTrackerPdfHtml(
       border-radius: 4px;
     }
 
+    .piece-card {
+      border: 1px solid #e6e6e6;
+      border-radius: 10px;
+      padding: 14px;
+      margin-bottom: 14px;
+      page-break-inside: avoid;
+    }
+
+    .piece-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 14px;
+      margin-bottom: 12px;
+    }
+
+    .piece-main {
+      flex: 1;
+    }
+
+    .piece-kpis {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .piece-kpi {
+      background: var(--accent);
+      border-radius: 8px;
+      padding: 10px;
+    }
+
+    .piece-kpi-label {
+      font-size: 10px;
+      text-transform: uppercase;
+      color: #666;
+      font-weight: 600;
+      letter-spacing: 0.4px;
+    }
+
+    .piece-kpi-value {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--secondary);
+      margin-top: 4px;
+    }
+
+    .piece-notes {
+      margin-top: 12px;
+      padding: 10px 12px;
+      background: #fafafa;
+      border-left: 3px solid var(--primary);
+      border-radius: 8px;
+    }
+
+    .piece-meta-badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .piece-badge {
+      display: inline-flex;
+      align-items: center;
+      border: 1px solid #ddd;
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-size: 10px;
+      font-weight: 700;
+      background: #fff;
+      color: #555;
+    }
+
+    .subsection-title {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--primary);
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .muted {
+      color: #666;
+      font-size: 11px;
+    }
+
     .social-links {
       display: flex;
       flex-wrap: wrap;
@@ -884,7 +989,7 @@ export function generateTrackerPdfHtml(
       ${companyName ? `<div style="font-size: ${logoDataUri ? '13px' : '24px'}; font-weight: ${logoDataUri ? '600' : '700'}; color: ${logoDataUri ? 'var(--secondary)' : 'var(--primary)'}; margin-top: ${logoDataUri ? '4px' : '0'}">${companyName}</div>` : ''}
     </div>
     <div style="text-align: right;">
-      <div style="font-size: 20px; font-weight: 700; color: var(--primary);">TRACKER DE SERIES</div>
+      <div style="font-size: 20px; font-weight: 700; color: var(--primary);">BITACORA DE IMPRESION</div>
       <div style="font-size: 11px; color: #666;">${new Date().toLocaleDateString('es-ES')}</div>
     </div>
   </div>
@@ -922,31 +1027,81 @@ export function generateTrackerPdfHtml(
   </div>
 
   <!-- Pieces List -->
-  <div class="section-title">Listado de Piezas</div>
-  <table>
-    <thead>
-      <tr>
-        <th>#</th>
-        <th>Etiqueta</th>
-        <th>Nombre</th>
-        <th>Tiempo</th>
-        <th>Gramos</th>
-        <th>Coste</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${pieces.map((piece, index) => `
-      <tr>
-        <td><strong>${index + 1}</strong></td>
-        <td>${escHtml(piece.label)}</td>
-        <td><strong>${escHtml(piece.name)}</strong></td>
-        <td>${formatTime(Number(piece.totalSecs))}</td>
-        <td>${Number(piece.totalGrams).toFixed(1)}g</td>
-        <td>${formatCurrency(piece.totalCost)}</td>
-      </tr>
-      `).join('')}
-    </tbody>
-  </table>
+  <div class="section-title">Bitacora de piezas</div>
+  ${pieces.map((piece, index) => {
+    const notes = escHtml(piece.notes || '');
+    const incident = escHtml(piece.incident || '');
+    const materials = Array.isArray(piece.materials) ? piece.materials : [];
+    const statusLabel = statusLabelMap[piece.status] ?? 'Impresa';
+    return `
+    <div class="piece-card">
+      <div class="piece-top">
+        <div class="piece-main">
+          <div style="font-size: 11px; color: #666; margin-bottom: 4px;">Pieza #${index + 1} · ${escHtml(piece.label)}</div>
+          <div style="font-size: 18px; font-weight: 700; color: var(--primary);">${escHtml(piece.name)}</div>
+        </div>
+        ${piece.imageUrl ? `<img src="${escHtml(piece.imageUrl)}" alt="${escHtml(piece.name)}" class="piece-image" />` : ''}
+      </div>
+
+      <div class="piece-kpis">
+        <div class="piece-kpi">
+          <div class="piece-kpi-label">Tiempo</div>
+          <div class="piece-kpi-value">${formatTime(Number(piece.totalSecs))}</div>
+        </div>
+        <div class="piece-kpi">
+          <div class="piece-kpi-label">Filamento</div>
+          <div class="piece-kpi-value">${Number(piece.totalGrams).toFixed(1)}g</div>
+        </div>
+        <div class="piece-kpi">
+          <div class="piece-kpi-label">Coste total</div>
+          <div class="piece-kpi-value">${formatCurrency(piece.totalCost)}</div>
+        </div>
+      </div>
+
+      <div class="piece-meta-badges">
+        <span class="piece-badge">Estado: ${escHtml(statusLabel)}</span>
+        ${piece.printedAt ? `<span class="piece-badge">Fecha: ${escHtml(piece.printedAt)}</span>` : ''}
+      </div>
+
+      ${materials.length > 0 ? `
+      <div>
+        <div class="subsection-title">Materiales extra</div>
+        <table>
+          <thead>
+            <tr>
+              <th>Material</th>
+              <th>Cantidad</th>
+              <th>Coste</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${materials.map((item) => `
+            <tr>
+              <td>${escHtml(item.name)}</td>
+              <td>${Number(item.quantity).toFixed(2)}</td>
+              <td>${formatCurrency(Number(item.cost))}</td>
+            </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+      ` : `<div class="muted">Sin materiales extra registrados.</div>`}
+
+      ${notes ? `
+      <div class="piece-notes">
+        <div class="subsection-title">Notas</div>
+        <div>${notes.replace(/\n/g, '<br />')}</div>
+      </div>
+      ` : ''}
+
+      ${incident ? `
+      <div class="piece-notes">
+        <div class="subsection-title">Incidencias / resultado</div>
+        <div>${incident.replace(/\n/g, '<br />')}</div>
+      </div>
+      ` : ''}
+    </div>`;
+  }).join('')}
 
   <!-- Footer -->
   ${footerText ? `
@@ -957,7 +1112,7 @@ export function generateTrackerPdfHtml(
   ${socialLinksHtml}
   
   <div class="footer" style="margin-top: 10px;">
-    Tracker generado con <strong>FilamentOS</strong> — ${new Date().toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' })}
+    Bitacora generada con <strong>FilamentOS</strong> - ${new Date().toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' })}
   </div>
 </body>
 </html>

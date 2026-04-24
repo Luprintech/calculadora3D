@@ -1,8 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from 'next-themes';
 import { useTranslation } from 'react-i18next';
-import { Sun, Moon, Calculator, Package, BarChart3, LineChart, ArrowRight, ChevronRight } from 'lucide-react';
+import { Sun, Moon, Calculator, Package, BarChart3, LineChart, ArrowRight, ChevronRight, Menu, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { LanguageSelector } from '@/components/language-selector';
 import { CurrencySelector } from '@/components/currency-selector';
@@ -50,6 +50,7 @@ export function HomePage() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const currentYear = new Date().getFullYear();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const logoSrc = resolvedTheme === 'dark' ? '/filamentos_negro.png' : '/filamentos_blanco.png';
   
@@ -115,8 +116,7 @@ export function HomePage() {
               <span className="text-xl font-black tracking-tight text-primary">FilamentOS</span>
             </div>
 
-            {/* Controls */}
-              <div className="flex items-center gap-2">
+            <div className="hidden items-center gap-2 md:flex">
               <ThemeToggle />
               <LanguageSelector />
               <CurrencySelector />
@@ -124,7 +124,39 @@ export function HomePage() {
                 {t('sign_in')}
               </Button>
             </div>
+
+            <Button
+              variant="outline"
+              size="icon"
+              className="md:hidden"
+              aria-label={mobileMenuOpen ? 'Cerrar menu' : 'Abrir menu'}
+              onClick={() => setMobileMenuOpen((open) => !open)}
+            >
+              {mobileMenuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+            </Button>
           </div>
+
+          {mobileMenuOpen && (
+            <div className="border-t border-border/60 px-4 py-4 md:hidden">
+              <div className="mx-auto flex max-w-sm flex-col items-center gap-4 text-center">
+                <div className="grid w-full grid-cols-3 place-items-center gap-3">
+                  <div className="flex w-full justify-center"><ThemeToggle /></div>
+                  <div className="flex w-full justify-center"><LanguageSelector /></div>
+                  <div className="flex w-full justify-center"><CurrencySelector /></div>
+                </div>
+                <Button
+                  variant="outline"
+                  className="w-full rounded-full font-bold"
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    loginWithGoogle();
+                  }}
+                >
+                  {t('sign_in')}
+                </Button>
+              </div>
+            </div>
+          )}
         </header>
 
         <main className="flex-1">

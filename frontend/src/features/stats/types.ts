@@ -8,6 +8,7 @@ export interface StatsFilters {
   from: string;       // ISO date string YYYY-MM-DD
   to: string;         // ISO date string YYYY-MM-DD
   projectId: string;  // 'all' or a project UUID
+  status: string;     // 'all' or lifecycle status
   granularity: Granularity;
   preset: DatePreset | 'custom';
 }
@@ -19,6 +20,13 @@ export interface StatsSummary {
   totalSecs: number;
   avgCostPerPiece: number;
   projectCount: number;
+  byStatus: {
+    pending: number;
+    printed: number;
+    postProcessed: number;
+    delivered: number;
+    failed: number;
+  };
 }
 
 export interface StatsTimePoint {

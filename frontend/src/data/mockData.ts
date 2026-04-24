@@ -126,7 +126,12 @@ export const mockTrackerPieces: FilamentPiece[] = [
     timeLines: 1,
     gramLines: 1,
     imageUrl: null,
+    notes: '',
+    status: 'printed',
+    printedAt: '2026-04-01',
+    incident: '',
     filaments: [],
+    materials: [],
   },
   {
     id: 'piece-2',
@@ -142,7 +147,12 @@ export const mockTrackerPieces: FilamentPiece[] = [
     timeLines: 1,
     gramLines: 1,
     imageUrl: null,
+    notes: 'Se montó sin problemas.',
+    status: 'post_processed',
+    printedAt: '2026-04-02',
+    incident: 'Se retiraron soportes manualmente.',
     filaments: [],
+    materials: [],
   },
   {
     id: 'piece-3',
@@ -158,7 +168,12 @@ export const mockTrackerPieces: FilamentPiece[] = [
     timeLines: 1,
     gramLines: 1,
     imageUrl: null,
+    notes: '',
+    status: 'failed',
+    printedAt: '2026-04-03',
+    incident: 'Warping en la base.',
     filaments: [],
+    materials: [],
   },
 ];
 
@@ -172,6 +187,13 @@ export const mockStatsResponse: StatsResponse = {
     totalSecs: 125.68 * 3600,
     avgCostPerPiece: 0.98,
     projectCount: 5,
+    byStatus: {
+      pending: 6,
+      printed: 24,
+      postProcessed: 14,
+      delivered: 12,
+      failed: 4,
+    },
   },
   timeSeries: [
     { period: '2025-11', pieces: 8, grams: 300, cost: 6.60, secs: 16 * 3600 },

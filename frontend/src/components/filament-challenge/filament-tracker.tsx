@@ -92,10 +92,15 @@ export function FilamentTracker() {
   const [deleteTargetProject, setDeleteTargetProject] = useState<FilamentProject | null>(null);
   const [pdfCustomizerOpen, setPdfCustomizerOpen] = useState(false);
   const [loginModalOpen, setLoginModalOpen] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'printed' | 'post_processed' | 'delivered' | 'failed'>('all');
 
   function openPdfCustomizer() {
     setPdfCustomizerOpen(true);
   }
+
+  const visiblePieces = statusFilter === 'all'
+    ? pieces
+    : pieces.filter((piece) => piece.status === statusFilter);
 
   // Preparar datos para el PDF
   const trackerPdfData: TrackerPdfData | null = activeProject ? {
@@ -109,14 +114,23 @@ export function FilamentTracker() {
     totalSecs: activeProject.totalSecs,
     totalGrams: activeProject.totalGrams,
     totalCost: activeProject.totalCost,
-    pieces: pieces.map(piece => ({
-      label: piece.label,
-      name: piece.name,
-      totalSecs: piece.totalSecs,
-      totalGrams: piece.totalGrams,
-      totalCost: piece.totalCost,
-      imageUrl: piece.imageUrl,
-    })),
+      pieces: visiblePieces.map(piece => ({
+        label: piece.label,
+        name: piece.name,
+        totalSecs: piece.totalSecs,
+        totalGrams: piece.totalGrams,
+        totalCost: piece.totalCost,
+        imageUrl: piece.imageUrl,
+        notes: piece.notes ?? '',
+        status: piece.status ?? 'printed',
+        printedAt: piece.printedAt ?? null,
+        incident: piece.incident ?? '',
+        materials: (piece.materials ?? []).map((material) => ({
+          name: material.name,
+          quantity: material.quantity,
+          cost: material.cost,
+        })),
+      })),
   } : null;
 
   if (authLoading) {
@@ -327,11 +341,26 @@ export function FilamentTracker() {
           onDeleteProject={() => setDeleteTargetProject(activeProject)}
         />
 
+        <div className="mb-4 flex flex-wrap justify-center gap-2">
+          {['all', 'pending', 'printed', 'post_processed', 'delivered', 'failed'].map((value) => (
+            <Button
+              key={value}
+              type="button"
+              variant={statusFilter === value ? 'default' : 'outline'}
+              size="sm"
+              className="rounded-full text-xs font-bold"
+              onClick={() => setStatusFilter(value as typeof statusFilter)}
+            >
+              {value === 'all' ? t('tracker.filter.all') : t(`tracker.status.${value === 'post_processed' ? 'postProcessed' : value}` as const)}
+            </Button>
+          ))}
+        </div>
+
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1.1fr_0.9fr]">
           <ChallengeForm
             project={activeProject}
             editingState={editingState}
-            pieces={pieces}
+            pieces={visiblePieces}
             onSave={handleSavePiece}
             onUpdate={handleUpdatePiece}
             onCancelEdit={() => setEditingState({ mode: 'create' })}
@@ -339,7 +368,7 @@ export function FilamentTracker() {
           />
           <ChallengePieceList
             project={activeProject}
-            pieces={pieces}
+            pieces={visiblePieces}
             editingState={editingState}
             onEdit={(id) => {
               setEditingState({ mode: 'edit', id });
@@ -370,7 +399,6 @@ export function FilamentTracker() {
                 description: editingProject.description,
                 coverImage: editingProject.coverImage ?? '',
                 goal: String(editingProject.goal),
-                pricePerKg: String(editingProject.pricePerKg),
                 currency: editingProject.currency,
               }}
               onSubmit={(input) => handleUpdateProject(editingProject.id, input)}

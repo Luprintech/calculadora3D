@@ -48,35 +48,64 @@ function MetricCard({ icon, label, value, sub, color }: MetricCardProps) {
 
 export function StatsMetricCards({ summary }: StatsMetricCardsProps) {
   const { t } = useTranslation();
+  const byStatus = summary.byStatus ?? {
+    pending: 0,
+    printed: 0,
+    postProcessed: 0,
+    delivered: 0,
+    failed: 0,
+  };
 
   return (
-    <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-      <MetricCard
-        icon={<Layers className="h-4 w-4 text-white" />}
-        label={t('stats_metric_pieces')}
-        value={summary.totalPieces.toLocaleString()}
-        sub={t('stats_metric_projects', { count: summary.projectCount })}
-        color="bg-blue-500"
-      />
-      <MetricCard
-        icon={<Weight className="h-4 w-4 text-white" />}
-        label={t('stats_metric_filament')}
-        value={formatKg(summary.totalGrams)}
-        color="bg-emerald-500"
-      />
-      <MetricCard
-        icon={<Euro className="h-4 w-4 text-white" />}
-        label={t('stats_metric_cost')}
-        value={formatCurrency(summary.totalCost)}
-        sub={t('stats_metric_avg_cost', { value: formatCurrency(summary.avgCostPerPiece) })}
-        color="bg-violet-500"
-      />
-      <MetricCard
-        icon={<Clock className="h-4 w-4 text-white" />}
-        label={t('stats_metric_time')}
-        value={formatTime(summary.totalSecs)}
-        color="bg-orange-500"
-      />
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <MetricCard
+          icon={<Layers className="h-4 w-4 text-white" />}
+          label={t('stats_metric_pieces')}
+          value={summary.totalPieces.toLocaleString()}
+          sub={t('stats_metric_projects', { count: summary.projectCount })}
+          color="bg-blue-500"
+        />
+        <MetricCard
+          icon={<Weight className="h-4 w-4 text-white" />}
+          label={t('stats_metric_filament')}
+          value={formatKg(summary.totalGrams)}
+          color="bg-emerald-500"
+        />
+        <MetricCard
+          icon={<Euro className="h-4 w-4 text-white" />}
+          label={t('stats_metric_cost')}
+          value={formatCurrency(summary.totalCost)}
+          sub={t('stats_metric_avg_cost', { value: formatCurrency(summary.avgCostPerPiece) })}
+          color="bg-violet-500"
+        />
+        <MetricCard
+          icon={<Clock className="h-4 w-4 text-white" />}
+          label={t('stats_metric_time')}
+          value={formatTime(summary.totalSecs)}
+          color="bg-orange-500"
+        />
+      </div>
+
+      <div className="rounded-xl border border-border/60 bg-card/80 p-4 backdrop-blur-sm">
+        <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          {t('stats_metric_status_breakdown')}
+        </p>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+          {[
+            { label: t('tracker.status.pending'), value: byStatus.pending },
+            { label: t('tracker.status.printed'), value: byStatus.printed },
+            { label: t('tracker.status.postProcessed'), value: byStatus.postProcessed },
+            { label: t('tracker.status.delivered'), value: byStatus.delivered },
+            { label: t('tracker.status.failed'), value: byStatus.failed },
+          ].map((item) => (
+            <div key={item.label} className="rounded-lg border border-border/50 bg-background/40 px-3 py-3 text-center">
+              <p className="text-[11px] font-semibold text-muted-foreground">{item.label}</p>
+              <p className="mt-1 text-lg font-black text-foreground">{item.value}</p>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

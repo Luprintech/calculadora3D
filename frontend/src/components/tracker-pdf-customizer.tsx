@@ -200,9 +200,9 @@ export function TrackerPdfCustomizer({ open, onOpenChange, trackerData }: Tracke
                 <FileText className="h-5 w-5 text-primary" />
               </div>
               <div>
-                <DialogTitle className="text-xl font-bold">Customizar PDF del Tracker</DialogTitle>
+                <DialogTitle className="text-xl font-bold">Customizar PDF de la bitacora</DialogTitle>
                 <p className="text-sm text-muted-foreground">
-                  Personaliza el reporte de tu proyecto con logo, colores y marca
+                  Personaliza el reporte de tu bitacora con logo, colores y marca
                 </p>
               </div>
             </div>
