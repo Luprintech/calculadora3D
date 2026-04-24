@@ -34,6 +34,7 @@ import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/auth-context";
 import { PdfCustomizer } from "@/components/pdf-customizer";
+import { LoginRequiredModal } from "@/components/login-required-modal";
 import { type ProjectData } from "@/features/calculator/api/use-pdf-customization";
 import {
   UploadCloud,
@@ -53,7 +54,7 @@ import {
   Info,
   Save,
   FilePlus,
-  Sparkles,
+
   Plus,
   X,
   Box,
@@ -329,7 +330,7 @@ function CalcFilamentRow({ form, index, canRemove, activeSpools, currency, onRem
 
 export function CalculatorForm({ form, onProjectSaved }: { form: UseFormReturn<FormData>; onProjectSaved?: () => void }) {
   const { toast } = useToast();
-  const { user, loginWithGoogle, loading: authLoading } = useAuth();
+  const { user, loginWithGoogle, loading: authLoading, isGuest, saveGuestProjectDraft } = useAuth();
   const { t } = useTranslation();
   const { currency } = useCurrency();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -388,6 +389,11 @@ export function CalculatorForm({ form, onProjectSaved }: { form: UseFormReturn<F
     vatPercentage: Number(watchedValues.vatPercentage || 0),
   });
 
+  const [currentStep, setCurrentStep] = useState(0);
+  const [pdfCustomizerOpen, setPdfCustomizerOpen] = useState(false);
+  const [import3mfOpen, setImport3mfOpen] = useState(false);
+  const [guestSaveModalOpen, setGuestSaveModalOpen] = useState(false);
+
   const {
     isAnalyzing,
     isSaving,
@@ -402,16 +408,15 @@ export function CalculatorForm({ form, onProjectSaved }: { form: UseFormReturn<F
     form,
     user,
     loginWithGoogle,
+    isGuest,
+    saveGuestProjectDraft,
+    onGuestSaveAttempt: () => setGuestSaveModalOpen(true),
     toast,
     t,
     watchedValues,
     calculations,
     onProjectSaved,
   });
-
-  const [currentStep, setCurrentStep] = useState(0);
-  const [pdfCustomizerOpen, setPdfCustomizerOpen] = useState(false);
-  const [import3mfOpen, setImport3mfOpen] = useState(false);
 
   function handle3MFConfirm(result: Import3MFResult) {
     // Fill print time
@@ -465,43 +470,69 @@ export function CalculatorForm({ form, onProjectSaved }: { form: UseFormReturn<F
     <TooltipProvider>
       <Form {...form}>
         <div className="space-y-4 print:hidden">
-          <Card className="border-primary/20 bg-gradient-to-b from-primary/5 to-transparent shadow-sm">
-            <CardContent className="p-4 md:p-6">
-              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <h2 className="font-headline text-2xl">{wizardSteps[currentStep].title}</h2>
-                  <p className="text-sm text-muted-foreground">{wizardSteps[currentStep].subtitle}</p>
-                </div>
-                <div className="rounded-full bg-muted px-3 py-1 text-xs font-medium self-start md:self-auto">
-                  {t('wizard_progress', { defaultValue: `Paso ${currentStep + 1} de ${totalSteps}` })}
-                </div>
+          <Card className="border-primary/20 shadow-sm overflow-hidden">
+            <CardContent className="p-0">
+              {/* Top accent bar */}
+              <div className="h-1 w-full bg-muted">
+                <div
+                  className="h-1 bg-primary transition-all duration-500 ease-out"
+                  style={{ width: `${Math.round(((currentStep + 1) / totalSteps) * 100)}%` }}
+                />
               </div>
 
-              <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-4">
-                {wizardSteps.map((step, index) => {
-                  const isActive = index === currentStep;
-                  const isComplete = index < currentStep;
-                  return (
-                    <button
-                      key={step.title}
-                      type="button"
-                      onClick={() => setCurrentStep(index)}
-                      className={`rounded-lg border px-3 py-2 text-left text-sm transition ${
-                        isActive
-                          ? 'border-primary bg-primary/10 text-primary'
-                          : isComplete
-                            ? 'border-primary/30 bg-primary/5 text-foreground'
-                            : 'border-border bg-background text-muted-foreground hover:bg-muted'
-                      }`}
-                    >
-                      <div className="text-xs uppercase tracking-wide">{t('wizard_step_label', { defaultValue: `Paso ${index + 1}` })}</div>
-                      <div className="font-medium leading-tight">{step.title}</div>
-                    </button>
-                  );
-                })}
+              <div className="p-4 md:p-6">
+                {/* Step label + percentage */}
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-bold uppercase tracking-widest text-primary">
+                    {t('wizard_step_label', { defaultValue: `Paso ${currentStep + 1}` })} {t('wizard_of', { defaultValue: 'de' })} {totalSteps}: {wizardSteps[currentStep].title}
+                  </span>
+                  <span className="text-xs font-bold text-muted-foreground">
+                    {Math.round(((currentStep + 1) / totalSteps) * 100)}% {t('wizard_complete', { defaultValue: 'Completado' })}
+                  </span>
+                </div>
+
+                {/* Subtitle */}
+                <p className="text-sm text-muted-foreground mb-4">{wizardSteps[currentStep].subtitle}</p>
+
+                {/* Step dot indicators */}
+                <div className="flex items-center gap-2">
+                  {wizardSteps.map((step, index) => {
+                    const isActive = index === currentStep;
+                    const isComplete = index < currentStep;
+                    return (
+                      <button
+                        key={step.title}
+                        type="button"
+                        onClick={() => setCurrentStep(index)}
+                        title={step.title}
+                        className="flex items-center gap-1.5 group"
+                      >
+                        <span
+                          className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-[0.65rem] font-bold transition-all duration-200 ${
+                            isActive
+                              ? 'border-primary bg-primary text-primary-foreground shadow-sm'
+                              : isComplete
+                                ? 'border-primary/50 bg-primary/15 text-primary'
+                                : 'border-border bg-muted text-muted-foreground group-hover:border-primary/40'
+                          }`}
+                        >
+                          {isComplete ? '✓' : index + 1}
+                        </span>
+                        <span
+                          className={`hidden md:inline text-xs font-medium transition-colors ${
+                            isActive ? 'text-foreground' : isComplete ? 'text-primary/70' : 'text-muted-foreground'
+                          }`}
+                        >
+                          {step.title}
+                        </span>
+                        {index < totalSteps - 1 && (
+                          <span className={`hidden md:inline mx-1 text-muted-foreground/30 text-xs`}>›</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-
-
             </CardContent>
           </Card>
 
@@ -815,65 +846,89 @@ export function CalculatorForm({ form, onProjectSaved }: { form: UseFormReturn<F
                 </div>
                 <p className="text-xl font-black text-primary">{formatCurrency(calculations.subTotal)}</p>
               </div>
-            )}            <div className="flex items-center justify-between gap-3">
-              <Button type="button" onClick={goPrev} variant="outline" disabled={currentStep === 0}>
-                {t('wizard_back', { defaultValue: 'Atrás' })}
-              </Button>
+            )}
 
-              <div className="flex items-center gap-2">
+            {/* PDF Customizer banner — solo en el paso final */}
+            {currentStep === totalSteps - 1 && (user || isGuest) && (
+              <div className="flex items-center justify-between rounded-lg border border-primary/30 bg-primary/5 px-4 py-3">
+                <div className="flex items-center gap-2">
+                  <FileText className="h-4 w-4 text-primary shrink-0" />
+                  <div>
+                    <p className="text-sm font-semibold">{t('pdf_customizer_title', { defaultValue: 'Customizar PDF' })}</p>
+                    <p className="text-xs text-muted-foreground">{t('pdf_customizer_hint', { defaultValue: 'Añade tu logo, colores y genera el presupuesto' })}</p>
+                  </div>
+                </div>
                 <Button
                   type="button"
                   size="sm"
-                  onClick={handleSaveProject}
-                  disabled={isSaving}
-                  className="gap-1.5 text-xs"
+                  onClick={() => setPdfCustomizerOpen(true)}
+                  className="gap-1.5 shrink-0"
                 >
-                  {isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-                  {isSaving ? t('cf_saving') : t('cf_save_project')}
+                  {t('pdf_customizer_open', { defaultValue: 'Abrir' })}
                 </Button>
+              </div>
+            )}
+
+            {/* Navigation row */}
+            <div className="flex items-center justify-between gap-3">
+              {/* Left: Atrás */}
+              <Button
+                type="button"
+                onClick={goPrev}
+                variant="outline"
+                disabled={currentStep === 0}
+                className="gap-1.5"
+              >
+                {t('wizard_back', { defaultValue: 'Atrás' })}
+              </Button>
+
+              {/* Center: acciones secundarias */}
+              <div className="flex flex-wrap items-center gap-2">
                 <Button
                   type="button"
                   size="sm"
                   variant="outline"
-                  onClick={handleShare}
+                  onClick={handleSaveProject}
+                  disabled={isSaving}
                   className="gap-1.5 text-xs"
+                  title={isSaving ? t('cf_saving') : t('cf_save_project')}
                 >
-                  <Share2 className="h-3.5 w-3.5" />
-                  {t('cf_share')}
+                  {isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                  <span className="hidden sm:inline">{isSaving ? t('cf_saving') : t('cf_save_project')}</span>
                 </Button>
-                {user && (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setPdfCustomizerOpen(true)}
-                    className="gap-1.5 text-xs"
-                  >
-                    <Sparkles className="h-3.5 w-3.5" />
-                    Customizar PDF
-                  </Button>
-                )}
                 <Button
                   type="button"
                   size="sm"
                   variant="outline"
                   onClick={handleNewProject}
                   className="gap-1.5 text-xs"
+                  title={t('cf_new_project')}
                 >
                   <FilePlus className="h-3.5 w-3.5" />
-                  {t('cf_new_project')}
+                  <span className="hidden sm:inline">{t('cf_new_project')}</span>
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={handleShare}
+                  className="gap-1.5 text-xs"
+                  title={t('cf_share')}
+                >
+                  <Share2 className="h-3.5 w-3.5" />
+                  <span className="hidden lg:inline">{t('cf_share')}</span>
                 </Button>
               </div>
 
+              {/* Right: Continuar / placeholder */}
               {currentStep < totalSteps - 1 ? (
-                <Button type="button" onClick={goNext}>
-                  {t('wizard_next', { defaultValue: 'Continuar' })}
+                <Button type="button" onClick={goNext} className="gap-1.5">
+                  {t('wizard_next', { defaultValue: 'Continuar' })} →
                 </Button>
               ) : (
-                <span className="w-[5rem]" />
+                <span className="w-[5.5rem]" />
               )}
             </div>
-
           </div>
         </div>
 
@@ -886,10 +941,11 @@ export function CalculatorForm({ form, onProjectSaved }: { form: UseFormReturn<F
         />
 
         {/* PDF Customizer Modal */}
-        {user && (
+        {(user || isGuest) && (
           <PdfCustomizer
             open={pdfCustomizerOpen}
             onOpenChange={setPdfCustomizerOpen}
+            guestMode={isGuest}
             projectData={{
               jobName: watchedValues.jobName,
               printingTimeHours: Number(watchedValues.printingTimeHours || 0),
@@ -928,6 +984,11 @@ export function CalculatorForm({ form, onProjectSaved }: { form: UseFormReturn<F
           />
         )}
       </Form>
+      <LoginRequiredModal
+        open={guestSaveModalOpen}
+        onOpenChange={setGuestSaveModalOpen}
+        message="Para guardar proyectos necesitas cuenta gratuita"
+      />
     </TooltipProvider>
   );
 }

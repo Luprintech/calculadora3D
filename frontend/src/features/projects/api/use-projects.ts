@@ -6,7 +6,7 @@ import { useToast } from '@/hooks/use-toast';
  * Hook para obtener todos los proyectos guardados del usuario
  * Cache: 5 minutos, re-fetch al reconectar
  */
-export function useProjects() {
+export function useProjects(guestMode = false) {
   const { toast } = useToast();
 
   return useQuery({
@@ -32,6 +32,8 @@ export function useProjects() {
     staleTime: 5 * 60 * 1000,
     // Retry solo una vez en caso de error
     retry: 1,
+    // Don't fetch in guest mode
+    enabled: !guestMode,
   });
 }
 
@@ -53,7 +55,7 @@ export function useSaveProject() {
 
       toast({
         title: 'Proyecto guardado',
-        description: `"${savedProject.name}" se ha guardado exitosamente`,
+        description: `"${savedProject.jobName}" se ha guardado exitosamente`,
       });
     },
     onError: (error) => {

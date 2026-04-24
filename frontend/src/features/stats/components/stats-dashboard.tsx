@@ -10,7 +10,7 @@ import { StatsCharts } from './stats-charts';
 import { StatsExportButtons } from './stats-export-buttons';
 import { useStatsQuery } from '../api/use-stats';
 import type { StatsFilters } from '../types';
-import { DemoBanner } from '@/components/demo-banner';
+import { GuestBanner } from '@/components/guest-banner';
 import { mockStatsResponse } from '@/data/mockData';
 
 function getDefaultFilters(): StatsFilters {
@@ -28,7 +28,7 @@ function getDefaultFilters(): StatsFilters {
 
 export function StatsDashboard() {
   const { t } = useTranslation();
-  const { user, isDemoMode } = useAuth();
+  const { user, isGuest } = useAuth();
   const [filters, setFilters] = useState<StatsFilters>(getDefaultFilters);
 
   // Fetch tracker projects for the filter dropdown (solo si hay usuario real)
@@ -42,11 +42,11 @@ export function StatsDashboard() {
   // Fetch stats (solo si hay usuario real)
   const statsQuery = useStatsQuery(filters);
 
-  // ── Modo demo ─────────────────────────────────────────────────────────────
-  if (isDemoMode) {
+  // ── Modo invitado ────────────────────────────────────────────────────────
+  if (isGuest) {
     return (
       <div className="space-y-5">
-        <DemoBanner message="👀 Estadísticas de ejemplo. Inicia sesión para ver tus datos reales." />
+        <GuestBanner message="👀 Estadísticas de ejemplo. Inicia sesión para ver tus datos reales." />
 
         <div className="flex items-center gap-3">
           <BarChart2 className="h-6 w-6 text-primary" />

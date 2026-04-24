@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getAuthUser, logoutAuth, type AuthUser } from './auth-api';
+import { getAuthState, logoutAuth, type AuthUser, type GuestSession } from './auth-api';
 import { useToast } from '@/hooks/use-toast';
 
 /**
@@ -7,13 +7,13 @@ import { useToast } from '@/hooks/use-toast';
  * Se usa en el AuthContext para sincronizar con React Query
  */
 export function useAuthUser() {
-  return useQuery<AuthUser | null>({
+  return useQuery<{ user: AuthUser | null; guest: GuestSession | null }>({
     queryKey: ['auth', 'user'],
     queryFn: async () => {
       try {
-        return await getAuthUser();
+        return await getAuthState();
       } catch {
-        return null;
+        return { user: null, guest: null };
       }
     },
     staleTime: Infinity, // El usuario no cambia frecuentemente

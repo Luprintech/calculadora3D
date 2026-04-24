@@ -12,9 +12,9 @@ interface SpoolCardProps {
   onDelete: (id: string) => void;
   onDeduct: (spool: Spool) => void;
   onFinish: (id: string) => void;
-  /** Si true, los botones de acción muestran el candado y llaman a onDemoAction */
-  demoMode?: boolean;
-  onDemoAction?: () => void;
+  /** Si true, los botones de acción muestran el candado y llaman a onGuestAction */
+  guestMode?: boolean;
+  onGuestAction?: () => void;
 }
 
 // ── SVG bobina de filamento ────────────────────────────────────────────────────
@@ -58,23 +58,23 @@ function SpoolIcon({ colorHex, finished = false, size = 64 }: { colorHex: string
   );
 }
 
-export function SpoolCard({ spool, onEdit, onDelete, onDeduct, onFinish, demoMode = false, onDemoAction }: SpoolCardProps) {
+export function SpoolCard({ spool, onEdit, onDelete, onDeduct, onFinish, guestMode = false, onGuestAction }: SpoolCardProps) {
   const { t } = useTranslation();
   const percent = getRemainingPercent(spool);
   const lowStock = isLowStock(spool);
   const finished = spool.status === 'finished';
 
-  const demoTooltip = 'Inicia sesión para gestionar tu inventario';
+  const guestTooltip = 'Inicia sesión para gestionar tu inventario';
 
-  function demoBtn(handler: () => void, children: React.ReactNode, extraClass = '') {
-    if (demoMode) {
+  function guestBtn(handler: () => void, children: React.ReactNode, extraClass = '') {
+    if (guestMode) {
       return (
         <Button
           size="sm"
           variant="outline"
           className={`h-7 cursor-not-allowed rounded-full px-2.5 text-xs opacity-50 ${extraClass}`}
-          title={demoTooltip}
-          onClick={onDemoAction}
+          title={guestTooltip}
+          onClick={onGuestAction}
         >
           {children}
         </Button>
@@ -143,9 +143,9 @@ export function SpoolCard({ spool, onEdit, onDelete, onDeduct, onFinish, demoMod
       {/* Actions */}
       {!finished && (
         <div className="mt-3 flex flex-wrap gap-1.5">
-          {demoBtn(() => onDeduct(spool), <><MinusCircle className="mr-1 h-3.5 w-3.5" />{t('inventory.deduct')}</>)}
-          {demoBtn(() => onFinish(spool.id), <><CheckCircle className="mr-1 h-3.5 w-3.5" />{t('inventory.markFinished')}</>)}
-          {!demoMode && spool.shopUrl && (
+          {guestBtn(() => onDeduct(spool), <><MinusCircle className="mr-1 h-3.5 w-3.5" />{t('inventory.deduct')}</>)}
+          {guestBtn(() => onFinish(spool.id), <><CheckCircle className="mr-1 h-3.5 w-3.5" />{t('inventory.markFinished')}</>)}
+          {spool.shopUrl && (
             <Button size="sm" variant="outline" className="h-7 rounded-full px-2.5 text-xs text-primary hover:text-primary" asChild>
               <a href={spool.shopUrl} target="_blank" rel="noopener noreferrer" title={t('inventory.buyLink')}>
                 <ShoppingCart className="mr-1 h-3.5 w-3.5" />
@@ -153,8 +153,8 @@ export function SpoolCard({ spool, onEdit, onDelete, onDeduct, onFinish, demoMod
               </a>
             </Button>
           )}
-          {demoBtn(() => onEdit(spool), <Edit2 className="h-3.5 w-3.5" />)}
-          {demoBtn(
+          {guestBtn(() => onEdit(spool), <Edit2 className="h-3.5 w-3.5" />)}
+          {guestBtn(
             () => onDelete(spool.id),
             <Trash2 className="h-3.5 w-3.5" />,
             'text-destructive hover:text-destructive',
@@ -165,11 +165,11 @@ export function SpoolCard({ spool, onEdit, onDelete, onDeduct, onFinish, demoMod
       {/* Edit/delete when finished */}
       {finished && (
         <div className="mt-3 flex gap-1.5">
-          {demoBtn(
+          {guestBtn(
             () => onEdit(spool),
             <Edit2 className="h-3.5 w-3.5" />,
           )}
-          {demoBtn(
+          {guestBtn(
             () => onDelete(spool.id),
             <Trash2 className="h-3.5 w-3.5" />,
             'text-destructive hover:text-destructive',

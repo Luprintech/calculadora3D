@@ -1,5 +1,5 @@
 import React from 'react';
-import { Lock } from 'lucide-react';
+import { Loader2, Lock } from 'lucide-react';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose,
 } from '@/components/ui/dialog';
@@ -15,11 +15,23 @@ interface LoginRequiredModalProps {
 }
 
 /**
- * Modal que aparece cuando el usuario en modo demo intenta una acción que
+ * Modal que aparece cuando el usuario invitado intenta una acción que
  * requiere cuenta real (guardar, crear proyectos, gestionar bobinas…).
  */
 export function LoginRequiredModal({ open, onOpenChange, message }: LoginRequiredModalProps) {
-  const { loginWithGoogle } = useAuth();
+  const { loginWithGoogle, startGuest } = useAuth();
+  const [guestLoading, setGuestLoading] = React.useState(false);
+
+  async function handleGuest() {
+    setGuestLoading(true);
+    try {
+      await startGuest();
+      onOpenChange(false);
+      window.location.href = '/calculadora';
+    } finally {
+      setGuestLoading(false);
+    }
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -30,9 +42,9 @@ export function LoginRequiredModal({ open, onOpenChange, message }: LoginRequire
               <Lock className="h-5 w-5 text-purple-600 dark:text-purple-400" />
             </div>
           </div>
-          <DialogTitle className="text-center">Para guardar necesitas una cuenta gratuita</DialogTitle>
+          <DialogTitle className="text-center">Para esta acción necesitas una cuenta gratuita</DialogTitle>
           <DialogDescription className="text-center">
-            {message ?? 'Crea tu cuenta gratuita con Google para guardar proyectos, gestionar tu inventario y acceder a tus datos desde cualquier lugar.'}
+            {message ?? 'Inicia sesión para desbloquear todas las funciones, guardar tus datos y acceder desde cualquier lugar.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -42,11 +54,20 @@ export function LoginRequiredModal({ open, onOpenChange, message }: LoginRequire
             onClick={loginWithGoogle}
           >
             <GoogleIcon className="mr-2 h-4 w-4" />
-            Crear cuenta gratis con Google
+            Iniciar sesión
+          </Button>
+          <Button
+            variant="outline"
+            className="w-full rounded-full font-semibold"
+            onClick={handleGuest}
+            disabled={guestLoading}
+          >
+            {guestLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            Continuar sin cuenta
           </Button>
           <DialogClose asChild>
             <Button variant="ghost" className="w-full rounded-full text-sm">
-              Seguir explorando la demo
+              Cancelar
             </Button>
           </DialogClose>
         </DialogFooter>

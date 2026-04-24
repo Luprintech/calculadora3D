@@ -7,20 +7,43 @@ export interface AuthUser {
   photo: string | null;
 }
 
-interface AuthUserResponse {
-  user: AuthUser | null;
+export interface GuestSession {
+  id: string;
+  expiresAt?: number;
 }
 
-export async function getAuthUser(): Promise<AuthUser | null> {
+interface AuthUserResponse {
+  user: AuthUser | null;
+  guest?: GuestSession | null;
+}
+
+export async function getAuthState(): Promise<{ user: AuthUser | null; guest: GuestSession | null }> {
   try {
     const data = await httpRequest<AuthUserResponse>({ url: '/api/auth/user' });
-    return data?.user ?? null;
+    return { user: data?.user ?? null, guest: data?.guest ?? null };
   } catch (error) {
     if (error instanceof HttpClientError && (error.status === 401 || error.status === 403)) {
-      return null;
+      return { user: null, guest: null };
     }
     throw error;
   }
+}
+
+export async function getAuthUser(): Promise<AuthUser | null> {
+  const state = await getAuthState();
+  return state.user;
+}
+
+export async function startGuestSession(): Promise<GuestSession> {
+  const data = await httpRequest<{ guest: GuestSession }>({
+    url: '/api/auth/guest/start',
+    init: { method: 'POST' },
+  });
+  return data.guest;
+}
+
+export async function logoutGuestSession(): Promise<void> {
+  await httpRequest<unknown>({ url: '/api/auth/guest/logout', init: { method: 'POST' } });
 }
 
 export async function logoutAuth(): Promise<void> {

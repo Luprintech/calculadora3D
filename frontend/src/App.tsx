@@ -36,6 +36,7 @@ import { AboutModal } from '@/components/about-modal';
 import { BuyMeCoffeeButton } from '@/components/buy-me-coffee-button';
 import { InventoryDashboard } from '@/features/inventory';
 import { HomePage } from '@/pages/HomePage';
+import { ChatBotBobina } from '@/components/chatbot-bobina';
 
 const StatsDashboard = React.lazy(() =>
   import('@/features/stats/components/stats-dashboard').then((m) => ({ default: m.StatsDashboard }))
@@ -59,7 +60,7 @@ function ThemeToggle() {
 
 // ── Ruta protegida ────────────────────────────────────────────────────────────
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { isGuest, isLoading } = useAuth();
+  const { isAuthenticated, isGuest, isLoading } = useAuth();
 
   if (isLoading) {
     return (
@@ -69,13 +70,13 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (!isGuest) return <Navigate to="/" replace />;
+  if (!isAuthenticated && !isGuest) return <Navigate to="/" replace />;
   return <>{children}</>;
 }
 
 // ── Ruta raíz: landing si no autenticado, app si sí ──────────────────────────
 function RootRoute() {
-  const { isAuthenticated, isDemoMode, isLoading } = useAuth();
+  const { isAuthenticated, isGuest, isLoading } = useAuth();
 
   if (isLoading) {
     return (
@@ -85,32 +86,13 @@ function RootRoute() {
     );
   }
 
-  if (isAuthenticated || isDemoMode) return <Navigate to="/calculadora" replace />;
+  if (isAuthenticated || isGuest) return <Navigate to="/calculadora" replace />;
   return <HomePage />;
-}
-
-// ── Ruta /demo: activa demo y redirige ────────────────────────────────────────
-function DemoRoute() {
-  const { enterDemoMode, isLoading } = useAuth();
-  const navigate = useNavigate();
-
-  React.useEffect(() => {
-    if (!isLoading) {
-      enterDemoMode();
-      navigate('/calculadora', { replace: true });
-    }
-  }, [isLoading, enterDemoMode, navigate]);
-
-  return (
-    <div className="flex h-screen items-center justify-center">
-      <Loader2 className="h-12 w-12 animate-spin text-primary" />
-    </div>
-  );
 }
 
 // ── App principal ─────────────────────────────────────────────────────────────
 function AppShell() {
-  const { user, logout, loginWithGoogle, loading: authLoading, isDemoMode, exitDemoMode } = useAuth();
+  const { user, logout, loginWithGoogle, loading: authLoading, isGuest, exitGuest } = useAuth();
   const { t } = useTranslation();
   const { resolvedTheme } = useTheme();
   const logoSrc = resolvedTheme === 'dark' ? '/filamentos_negro.png' : '/filamentos_blanco.png';
@@ -142,7 +124,7 @@ function AppShell() {
   });
   const currentYear = new Date().getFullYear();
 
-  const displayName = user?.name ?? user?.email ?? (isDemoMode ? 'Demo' : '');
+  const displayName = user?.name ?? user?.email ?? (isGuest ? 'Invitado' : '');
   const avatarUrl = user?.photo ?? undefined;
   const initials = displayName.charAt(0).toUpperCase();
 
@@ -155,35 +137,35 @@ function AppShell() {
           transition={{ duration: 0.4 }}
           className="mb-8 rounded-2xl border border-border/70 bg-card/95 p-4 shadow-[0_12px_36px_rgba(2,8,23,0.10)] backdrop-blur-md print:hidden dark:border-white/10 dark:bg-card/70 dark:shadow-[0_18px_60px_rgba(0,0,0,0.22)] sm:p-5"
         >
-          <div className="flex flex-col items-center gap-4 text-center sm:flex-row sm:justify-between">
-            <div className="flex items-center gap-4">
+          <div className="flex items-center justify-between">
+            {/* Logo y título */}
+            <div className="flex items-center gap-3">
               <img
                 src={logoSrc}
                 alt={t('logo_alt')}
-                width={80}
-                height={80}
+                width={50}
+                height={50}
                 className="rounded-full shadow-lg border border-gray-200"
               />
               <div className="text-left">
-                <h1 className="font-headline text-3xl font-bold tracking-tighter text-primary sm:text-4xl">
+                <h1 className="font-headline text-xl font-bold tracking-tighter text-primary sm:text-2xl md:text-3xl">
                   {t('app_title')}
                 </h1>
-                <p className="text-xs font-medium text-muted-foreground/80 -mt-0.5">
-                  El sistema operativo de tus impresiones 3D
-                </p>
-                {isDemoMode ? (
-                  <p className="mt-0.5 inline-flex items-center gap-1.5 rounded-full bg-purple-100 px-2.5 py-0.5 text-xs font-semibold text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">
-                    👀 Modo demo
+                {isGuest ? (
+                  <p className="mt-0.5 inline-flex items-center gap-1.5 rounded-full bg-purple-100 px-2 py-0.5 text-[0.65rem] font-semibold text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">
+                    👀 Modo invitado
                   </p>
-                ) : (
-                  <p className="text-sm text-muted-foreground mt-0.5">{t('welcome', { name: displayName })}</p>
-                )}
+                ) : user ? (
+                  <p className="text-xs text-muted-foreground mt-0.5 hidden sm:block">{t('welcome', { name: displayName })}</p>
+                ) : null}
               </div>
             </div>
-            <div className="flex items-center gap-2">
+
+            {/* Botones: solo iconos siempre */}
+            <div className="flex items-center gap-1.5 sm:gap-2">
               {canInstall && (
-                <Button variant="outline" size="sm" onClick={install} title={t('install_title')}>
-                  <Download className="mr-2 h-4 w-4" /> {t('install')}
+                <Button variant="outline" size="icon" onClick={install} title={t('install_title')}>
+                  <Download className="h-4 w-4" />
                 </Button>
               )}
               <Button
@@ -191,6 +173,7 @@ function AppShell() {
                 size="icon"
                 aria-label="Acerca de FilamentOS"
                 onClick={() => setAboutOpen(true)}
+                title="Acerca de FilamentOS"
               >
                 <Info className="h-4 w-4" />
               </Button>
@@ -203,38 +186,49 @@ function AppShell() {
                     <LogOut className="h-4 w-4" />
                   </Button>
                   {avatarUrl && (
-                    <Avatar>
+                    <Avatar className="h-8 w-8 hidden sm:flex">
                       <AvatarImage src={avatarUrl} alt={displayName} />
                       <AvatarFallback>{initials}</AvatarFallback>
                     </Avatar>
                   )}
                 </>
-              ) : isDemoMode ? (
+              ) : isGuest ? (
                 <>
-                  <Button onClick={loginWithGoogle} variant="outline" size="sm" className="rounded-full font-bold">
-                    Crear cuenta gratis
+                  <Button onClick={loginWithGoogle} variant="outline" size="sm" className="hidden sm:inline-flex rounded-full font-bold">
+                    Iniciar sesión
                   </Button>
                   <Button
-                    onClick={() => { exitDemoMode(); window.location.href = '/'; }}
-                    variant="ghost"
-                    size="sm"
-                    className="text-xs text-muted-foreground"
-                    title="Salir del modo demo"
+                    onClick={loginWithGoogle}
+                    variant="outline"
+                    size="icon"
+                    className="sm:hidden"
+                    title="Iniciar sesión"
                   >
-                    <LogOut className="h-3.5 w-3.5" />
+                    <LogOut className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    onClick={() => { void exitGuest().then(() => { window.location.href = '/'; }); }}
+                    variant="ghost"
+                    size="icon"
+                    title="Salir del modo invitado"
+                  >
+                    <LogOut className="h-4 w-4" />
                   </Button>
                 </>
               ) : (
                 <>
-                  <Button onClick={loginWithGoogle} variant="outline" size="sm">
+                  <Button onClick={loginWithGoogle} variant="outline" size="sm" className="hidden sm:inline-flex">
                     {t('sign_in')}
+                  </Button>
+                  <Button onClick={loginWithGoogle} variant="outline" size="icon" className="sm:hidden" title={t('sign_in')}>
+                    <LogOut className="h-4 w-4" />
                   </Button>
                   {isDevMode && (
                     <Button
                       onClick={handleDevLogin}
                       disabled={devLoading}
                       variant="outline"
-                      size="sm"
+                      size="icon"
                       className="border-dashed border-yellow-500/60 text-yellow-500 hover:bg-yellow-500/10 hover:text-yellow-400"
                       title="Dev Login — usuario de seed"
                     >
@@ -245,6 +239,11 @@ function AppShell() {
               )}
             </div>
           </div>
+          {isGuest && (
+            <div className="mt-4 rounded-2xl border border-purple-300/40 bg-gradient-to-r from-purple-500/12 via-fuchsia-500/10 to-indigo-500/12 px-4 py-3 text-sm font-semibold text-purple-800 dark:text-purple-200">
+              Estás en modo invitado. Crea una cuenta gratuita para guardar tus proyectos.
+            </div>
+          )}
         </motion.header>
 
         <Tabs defaultValue="calculator" className="w-full">
@@ -253,11 +252,11 @@ function AppShell() {
               <CalculatorIcon className="mr-0 h-4 w-4 sm:mr-2" />
               <span className="hidden sm:inline">{t('tab_calculator')}</span>
             </TabsTrigger>
-            <TabsTrigger value="challenge" className="rounded-xl py-2.5 font-bold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-lg">
+            <TabsTrigger value="challenge" disabled={isGuest} className="rounded-xl py-2.5 font-bold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-lg disabled:opacity-45">
               <BarChart3 className="mr-0 h-4 w-4 sm:mr-2" />
               <span className="hidden sm:inline">{t('tab_tracker')}</span>
             </TabsTrigger>
-            <TabsTrigger value="statistics" className="rounded-xl py-2.5 font-bold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-lg">
+            <TabsTrigger value="statistics" disabled={isGuest} className="rounded-xl py-2.5 font-bold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-lg disabled:opacity-45">
               <LineChart className="mr-0 h-4 w-4 sm:mr-2" />
               <span className="hidden sm:inline">{t('tab_statistics')}</span>
             </TabsTrigger>
@@ -284,7 +283,7 @@ function AppShell() {
                   <h2 className="challenge-gradient-text text-3xl font-black leading-none sm:text-4xl">
                     {t('calc_hero_title')}
                   </h2>
-                  <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
+                  <p className="mt-2 text-sm text-muted-foreground whitespace-nowrap">
                     {t('calc_hero_subtitle')}
                   </p>
                 </section>
@@ -389,10 +388,7 @@ function AppContent() {
         {/* Raíz: landing si no autenticado, app si sí */}
         <Route path="/" element={<RootRoute />} />
 
-        {/* Ruta demo: activa modo demo y redirige a /calculadora */}
-        <Route path="/demo" element={<DemoRoute />} />
-
-        {/* Rutas protegidas (requieren auth real o modo demo) */}
+        {/* Rutas protegidas (requieren auth real o modo invitado) */}
         <Route
           path="/calculadora"
           element={
@@ -430,6 +426,7 @@ function AppContent() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       {!accepted && <CookieBanner onAccept={accept} />}
+      <ChatBotBobina />
     </>
   );
 }

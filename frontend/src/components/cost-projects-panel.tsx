@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import type { UseFormReturn } from 'react-hook-form';
-import { Loader2, ImageIcon, Trash2, FolderUp, Clock3, Package, Search, Lock } from 'lucide-react';
+import { Loader2, ImageIcon, Trash2, FolderUp, Clock3, Package, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
@@ -8,8 +8,7 @@ import { useAuth } from '@/context/auth-context';
 import type { FormData } from '@/lib/schema';
 import { useTranslation } from 'react-i18next';
 import { useProjects, useDeleteProject } from '@/features/projects/api/use-projects';
-import type { SavedProject } from '@/features/projects/api/projects-api';
-import { mockSavedProjects } from '@/data/mockData';
+import { deleteGuestProject, getGuestProjects, type SavedProject } from '@/features/projects/api/projects-api';
 import { LoginRequiredModal } from '@/components/login-required-modal';
 
 interface CostProjectsPanelProps {
@@ -23,27 +22,40 @@ function formatTime(hours: number, minutes: number): string {
 
 export function CostProjectsPanel({ form, refreshKey }: CostProjectsPanelProps) {
   const { toast } = useToast();
-  const { user, isDemoMode } = useAuth();
+  const { user, isGuest } = useAuth();
   const { t } = useTranslation();
   const [query, setQuery] = useState('');
   const [loginModalOpen, setLoginModalOpen] = useState(false);
+  const [guestProjects, setGuestProjects] = useState<SavedProject[]>(() => getGuestProjects());
   const iconClass = 'h-4 w-4';
 
-  // Usar React Query para obtener proyectos (solo si no está en demo)
-  const { data: projects = [], isLoading, refetch } = useProjects();
+  // Usar React Query para obtener proyectos (solo si no está en modo invitado)
+  const { data: projects = [], isLoading, refetch } = useProjects(isGuest);
   const deleteProjectMutation = useDeleteProject();
 
   // Refrescar cuando cambia refreshKey
   React.useEffect(() => {
-    if (refreshKey > 0 && !isDemoMode) {
+    if (refreshKey > 0 && !isGuest) {
       refetch();
     }
-  }, [refreshKey, refetch, isDemoMode]);
+  }, [refreshKey, refetch, isGuest]);
+
+  React.useEffect(() => {
+    if (!isGuest) return;
+    const refreshGuestProjects = () => setGuestProjects(getGuestProjects());
+    refreshGuestProjects();
+    window.addEventListener('storage', refreshGuestProjects);
+    window.addEventListener('filamentos:guest-projects-updated', refreshGuestProjects);
+    return () => {
+      window.removeEventListener('storage', refreshGuestProjects);
+      window.removeEventListener('filamentos:guest-projects-updated', refreshGuestProjects);
+    };
+  }, [isGuest, refreshKey]);
 
   const currentFormId = form.watch('id');
 
-  // En modo demo mostrar mock projects
-  const displayProjects = isDemoMode ? [] : projects;
+  // En modo invitado mostrar únicamente proyectos locales del navegador actual
+  const displayProjects = isGuest ? guestProjects : projects;
 
   const sortedProjects = useMemo(
     () => displayProjects.filter((project) =>
@@ -59,6 +71,13 @@ export function CostProjectsPanel({ form, refreshKey }: CostProjectsPanelProps) 
 
   function handleDeleteProject(project: SavedProject) {
     if (!window.confirm(t('delete_confirm', { name: project.jobName }))) return;
+    if (isGuest) {
+      deleteGuestProject(project.id);
+      setGuestProjects(getGuestProjects());
+      if (currentFormId === project.id) form.reset();
+      toast({ title: 'Proyecto local eliminado' });
+      return;
+    }
     deleteProjectMutation.mutate(project.id, {
       onSuccess: () => {
         if (currentFormId === project.id) form.reset();
@@ -75,8 +94,8 @@ export function CostProjectsPanel({ form, refreshKey }: CostProjectsPanelProps) 
         </p>
       </div>
 
-      {/* Buscador: solo en modo real */}
-      {user && !isDemoMode && (
+      {/* Buscador: cuenta real o proyectos locales del invitado */}
+      {((user && !isGuest) || (isGuest && displayProjects.length > 0)) && (
         <div className="relative mb-5 shrink-0">
           <Search className={`pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground ${iconClass}`} />
           <Input
@@ -88,48 +107,7 @@ export function CostProjectsPanel({ form, refreshKey }: CostProjectsPanelProps) 
         </div>
       )}
 
-      {/* ── Demo mode: mock projects con candado ─────────────────────────── */}
-      {isDemoMode ? (
-        <div className="flex flex-col gap-3">
-          {mockSavedProjects.map((project) => (
-            <div
-              key={project.id}
-              className="rounded-[20px] border border-border/70 bg-card/70 dark:border-white/[0.08] dark:bg-white/[0.03]"
-            >
-              <div className="flex items-start gap-4 p-4">
-                <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-muted/50 text-muted-foreground dark:bg-white/[0.05]">
-                  <ImageIcon className="h-4 w-4" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-base font-extrabold text-foreground">{project.name}</p>
-                  <div className="mt-1.5 flex flex-wrap gap-2 text-[0.74rem] text-muted-foreground">
-                    <span className="inline-flex items-center gap-1">
-                      <Clock3 className={iconClass} />
-                      {project.timeMinutes}m
-                    </span>
-                    <span className="inline-flex items-center gap-1">
-                      <Package className={iconClass} />
-                      {project.filamentGrams}g
-                    </span>
-                  </div>
-                </div>
-              </div>
-              <div className="px-4 pb-4">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="w-full cursor-not-allowed rounded-full text-xs font-bold opacity-50"
-                  title="Inicia sesión para cargar proyectos"
-                  onClick={() => setLoginModalOpen(true)}
-                >
-                  <Lock className={`mr-1.5 ${iconClass}`} />
-                  Cargar proyecto
-                </Button>
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : !user ? (
+      {!user && !isGuest ? (
         <div className="rounded-[18px] border border-dashed border-border/70 bg-muted/30 px-4 py-8 text-center text-sm text-muted-foreground dark:border-white/[0.12] dark:bg-white/[0.02]">
           {t('saved_projects_login')}
         </div>
@@ -139,7 +117,7 @@ export function CostProjectsPanel({ form, refreshKey }: CostProjectsPanelProps) 
         </div>
       ) : sortedProjects.length === 0 ? (
         <div className="rounded-[18px] border border-dashed border-border/70 bg-muted/30 px-4 py-8 text-center text-sm text-muted-foreground dark:border-white/[0.12] dark:bg-white/[0.02]">
-          {t('saved_projects_empty')}
+          {isGuest ? 'Aún no tienes proyectos locales. Guarda uno desde la calculadora para verlo aquí.' : t('saved_projects_empty')}
         </div>
       ) : (
         <div className="min-h-0 flex-1 overflow-y-auto pr-1.5">

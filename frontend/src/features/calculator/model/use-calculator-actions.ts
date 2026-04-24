@@ -7,6 +7,7 @@ import type { LocalUser } from '@/context/auth-context';
 import type { CostCalculations } from '@/features/calculator/domain/cost-calculator';
 import { buildShareSummary } from '@/features/calculator/lib/share-summary';
 import { useSaveProject, useUpdateProject } from '@/features/projects/api/use-projects';
+import { saveGuestProject } from '@/features/projects/api/projects-api';
 import { useGcodeAnalysis } from '@/features/calculator/api/use-gcode-analysis';
 
 interface ToastInput {
@@ -21,6 +22,9 @@ interface UseCalculatorActionsInput {
   form: UseFormReturn<FormData>;
   user: LocalUser | null;
   loginWithGoogle: () => void;
+  isGuest?: boolean;
+  onGuestSaveAttempt?: () => void;
+  saveGuestProjectDraft?: (project: unknown) => void;
   toast: ToastFn;
   t: TFunction;
   watchedValues: FormData;
@@ -41,6 +45,9 @@ export function useCalculatorActions({
   form,
   user,
   loginWithGoogle,
+  isGuest = false,
+  onGuestSaveAttempt,
+  saveGuestProjectDraft,
   toast,
   t,
   watchedValues,
@@ -69,7 +76,29 @@ export function useCalculatorActions({
 
   const handleSaveProject = async () => {
     if (!user) {
-      loginWithGoogle();
+      if (isGuest) {
+        const isValid = await form.trigger();
+        if (!isValid) {
+          toast({
+            variant: 'destructive',
+            title: t('toast_missing_fields'),
+            description: t('toast_missing_fields_msg'),
+          });
+          return;
+        }
+
+        const localProject = saveGuestProject(form.getValues());
+        form.setValue('id', localProject.id, { shouldDirty: false });
+        saveGuestProjectDraft?.(localProject);
+        toast({
+          title: 'Proyecto guardado localmente',
+          description: 'Está disponible solo en este navegador. Inicia sesión para guardarlo en tu cuenta.',
+        });
+        onProjectSaved?.();
+        onGuestSaveAttempt?.();
+      } else {
+        loginWithGoogle();
+      }
       return;
     }
 

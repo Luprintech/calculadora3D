@@ -12,6 +12,9 @@ import dotenv from 'dotenv';
 import AdmZip from 'adm-zip';
 import JSZip from 'jszip';
 import { XMLParser } from 'fast-xml-parser';
+import nodemailer from 'nodemailer';
+import dns from 'dns';
+import { promisify } from 'util';
 
 dotenv.config();
 
@@ -158,6 +161,12 @@ db.exec(`
     show_labor_costs     INTEGER DEFAULT 1,
     show_electricity     INTEGER DEFAULT 1,
     template_name   TEXT DEFAULT 'default',
+    website_url     TEXT,
+    instagram_url   TEXT,
+    tiktok_url      TEXT,
+    facebook_url    TEXT,
+    x_url           TEXT,
+    social_links    TEXT,
     created_at      TEXT DEFAULT (datetime('now')),
     updated_at      TEXT DEFAULT (datetime('now'))
   );
@@ -191,6 +200,13 @@ db.exec(`
     gramos      REAL NOT NULL,
     fecha       TEXT DEFAULT (datetime('now'))
   );
+  CREATE TABLE IF NOT EXISTS contact_messages (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    name       TEXT NOT NULL,
+    email      TEXT NOT NULL,
+    message    TEXT NOT NULL,
+    created_at TEXT DEFAULT (datetime('now'))
+  );
   CREATE TABLE IF NOT EXISTS filamentos_comunidad (
     id               INTEGER PRIMARY KEY AUTOINCREMENT,
     codigo           TEXT NOT NULL,
@@ -209,6 +225,23 @@ db.exec(`
 `);
 
 db.prepare('DELETE FROM sessions WHERE expires_at <= ?').run(Date.now());
+
+const pdfCustomizationColumns = db
+  .prepare("PRAGMA table_info(pdf_customization)")
+  .all() as { name: string }[];
+
+for (const [column, type] of [
+  ['website_url', 'TEXT'],
+  ['instagram_url', 'TEXT'],
+  ['tiktok_url', 'TEXT'],
+  ['facebook_url', 'TEXT'],
+  ['x_url', 'TEXT'],
+  ['social_links', 'TEXT'],
+] as const) {
+  if (!pdfCustomizationColumns.some((c) => c.name === column)) {
+    db.exec(`ALTER TABLE pdf_customization ADD COLUMN ${column} ${type}`);
+  }
+}
 
 // ── Performance index for stats queries ──────────────────────────────────────
 db.exec(`
@@ -509,6 +542,24 @@ app.get('/api/auth/user', (req, res) => {
   res.json({ user: req.user });
 });
 
+// POST /api/auth/guest/start - Iniciar sesión como invitado
+app.post('/api/auth/guest/start', (req, res) => {
+  const guestId = `guest-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000; // 7 días
+  
+  res.json({
+    guest: {
+      id: guestId,
+      expiresAt,
+    },
+  });
+});
+
+// POST /api/auth/guest/logout - Cerrar sesión de invitado
+app.post('/api/auth/guest/logout', (_req, res) => {
+  res.json({ success: true });
+});
+
 // ── Middleware guard ──────────────────────────────────────────────────────────
 function requireAuth(
   req: express.Request,
@@ -754,7 +805,7 @@ app.post('/api/tracker/projects/:projectId/pieces', requireAuth, (req, res) => {
     .prepare('SELECT COALESCE(MAX(order_index), -1) + 1 as next_order FROM tracker_pieces WHERE project_id=? AND user_id=?')
     .get(req.params.projectId, user.id) as { next_order: number };
 
-  const { label, name, timeText='', gramText='', totalSecs=0, timeLines=0, gramLines=0, imageUrl=null } = req.body;
+  const { label, name, timeText = '', gramText = '', totalSecs = 0, timeLines = 0, gramLines = 0, imageUrl = null } = req.body;
   const rawFilaments: FilamentInput[] = Array.isArray(req.body.filaments) ? req.body.filaments : [];
   const legacyTotalGrams = parseFloat(req.body.totalGrams) || 0;
   const legacySpoolId: string | null = req.body.spoolId ?? null;
@@ -762,7 +813,7 @@ app.post('/api/tracker/projects/:projectId/pieces', requireAuth, (req, res) => {
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
   let totalGrams = 0;
-  let totalCost  = 0;
+  let totalCost = 0;
   let spoolRemainingG: number | undefined;
 
   if (rawFilaments.length > 0) {
@@ -824,7 +875,7 @@ app.post('/api/tracker/projects/:projectId/pieces', requireAuth, (req, res) => {
   } else {
     // ── Legacy single-spool mode (backward compat) ────────────────────────────
     totalGrams = legacyTotalGrams;
-    totalCost  = parseFloat((totalGrams * (project.price_per_kg / 1000)).toFixed(4));
+    totalCost = parseFloat((totalGrams * (project.price_per_kg / 1000)).toFixed(4));
 
     if (legacySpoolId) {
       try {
@@ -886,12 +937,12 @@ app.put('/api/tracker/projects/:projectId/pieces/:id', requireAuth, (req, res) =
     .get(req.params.projectId, user.id) as { price_per_kg: number } | undefined;
   if (!project) { res.status(404).json({ error: 'Proyecto no encontrado.' }); return; }
 
-  const { label, name, timeText='', gramText='', totalSecs=0, timeLines=0, gramLines=0, imageUrl=null } = req.body;
+  const { label, name, timeText = '', gramText = '', totalSecs = 0, timeLines = 0, gramLines = 0, imageUrl = null } = req.body;
   const rawFilaments: FilamentInput[] = Array.isArray(req.body.filaments) ? req.body.filaments : [];
   const legacyTotalGrams = parseFloat(req.body.totalGrams) || 0;
   const now = new Date().toISOString();
   let totalGrams = 0;
-  let totalCost  = 0;
+  let totalCost = 0;
 
   if (rawFilaments.length > 0) {
     totalGrams = rawFilaments.reduce((s, f) => s + (parseFloat(String(f.grams)) || 0), 0);
@@ -1313,6 +1364,7 @@ app.get('/api/pdf/config', requireAuth, (req, res) => {
     accentColor: config.accent_color,
     companyName: config.company_name,
     footerText: config.footer_text,
+    socialLinks: config.social_links ? JSON.parse(config.social_links) : [],
     showMachineCosts: Boolean(config.show_machine_costs),
     showBreakdown: Boolean(config.show_breakdown),
     showOtherCosts: Boolean(config.show_other_costs),
@@ -1332,6 +1384,7 @@ app.post('/api/pdf/config', requireAuth, (req, res) => {
     accentColor,
     companyName,
     footerText,
+    socialLinks,
     showMachineCosts,
     showBreakdown,
     showOtherCosts,
@@ -1345,10 +1398,10 @@ app.post('/api/pdf/config', requireAuth, (req, res) => {
   db.prepare(`
     INSERT INTO pdf_customization (
       user_id, logo_path, primary_color, secondary_color, accent_color,
-      company_name, footer_text, show_machine_costs, show_breakdown,
+      company_name, footer_text, social_links, show_machine_costs, show_breakdown,
       show_other_costs, show_labor_costs, show_electricity,
       template_name, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(user_id) DO UPDATE SET
       logo_path = excluded.logo_path,
       primary_color = excluded.primary_color,
@@ -1356,6 +1409,7 @@ app.post('/api/pdf/config', requireAuth, (req, res) => {
       accent_color = excluded.accent_color,
       company_name = excluded.company_name,
       footer_text = excluded.footer_text,
+      social_links = excluded.social_links,
       show_machine_costs = excluded.show_machine_costs,
       show_breakdown = excluded.show_breakdown,
       show_other_costs = excluded.show_other_costs,
@@ -1371,6 +1425,7 @@ app.post('/api/pdf/config', requireAuth, (req, res) => {
     accentColor ?? '#f0f4f8',
     companyName ?? null,
     footerText ?? null,
+    socialLinks ? JSON.stringify(socialLinks) : null,
     showMachineCosts ? 1 : 0,
     showBreakdown ? 1 : 0,
     showOtherCosts ? 1 : 0,
@@ -1485,6 +1540,124 @@ app.post('/api/tracker/pdf/generate', requireAuth, async (req, res) => {
   }
 });
 
+// ── Contact / Reportar bugs ───────────────────────────────────────────────────
+
+const resolveMx = promisify(dns.resolveMx);
+
+// POST /api/contact/verify-email - Verificar que un email existe
+app.post('/api/contact/verify-email', async (req, res) => {
+  const { email } = req.body;
+
+  if (!email || typeof email !== 'string') {
+    res.status(400).json({ valid: false, message: 'Email no proporcionado' });
+    return;
+  }
+
+  // Validación básica de formato
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) {
+    res.status(400).json({ valid: false, message: 'Formato de email inválido' });
+    return;
+  }
+
+  try {
+    // Extraer el dominio del email
+    const domain = email.split('@')[1];
+
+    // Verificar que el dominio tiene registros MX (servidores de correo)
+    const mxRecords = await resolveMx(domain);
+
+    if (!mxRecords || mxRecords.length === 0) {
+      res.json({ valid: false, message: 'El dominio no tiene servidores de correo' });
+      return;
+    }
+
+    res.json({ valid: true, message: 'Email válido' });
+  } catch (error) {
+    // Error DNS significa que el dominio no existe
+    res.json({ valid: false, message: 'El dominio del email no existe' });
+  }
+});
+
+// POST /api/contact/send - Enviar mensaje de contacto
+app.post('/api/contact/send', async (req, res) => {
+  const { name, email, message } = req.body;
+
+  // Validación básica
+  if (!name || !email || !message) {
+    res.status(400).json({ error: 'Todos los campos son obligatorios' });
+    return;
+  }
+
+  // Validar email
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    res.status(400).json({ error: 'Email inválido' });
+    return;
+  }
+
+  try {
+    // Guardar en base de datos para historial
+    db.prepare(`
+      INSERT INTO contact_messages (name, email, message, created_at)
+      VALUES (?, ?, ?, ?)
+    `).run(name, email, message, new Date().toISOString());
+
+    // Enviar email si las credenciales SMTP están configuradas
+    const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, BUG_REPORT_EMAIL } = process.env;
+
+    if (SMTP_HOST && SMTP_PORT && SMTP_USER && SMTP_PASS && BUG_REPORT_EMAIL) {
+      const transporter = nodemailer.createTransport({
+        host: SMTP_HOST,
+        port: parseInt(SMTP_PORT, 10),
+        secure: false, // true para 465, false para otros puertos
+        auth: {
+          user: SMTP_USER,
+          pass: SMTP_PASS,
+        },
+      });
+
+      await transporter.sendMail({
+        from: `"FilamentOS Bot" <${SMTP_USER}>`,
+        to: BUG_REPORT_EMAIL,
+        subject: `🐛 Nuevo reporte de bug/sugerencia de ${name}`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #8b5cf6;">📬 Nuevo mensaje desde FilamentOS</h2>
+            <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
+              <p><strong>👤 Nombre:</strong> ${name}</p>
+              <p><strong>📧 Email:</strong> <a href="mailto:${email}">${email}</a></p>
+              <p><strong>📅 Fecha:</strong> ${new Date().toLocaleString('es-ES')}</p>
+            </div>
+            <div style="background: #fff; padding: 20px; border-left: 4px solid #8b5cf6; margin: 20px 0;">
+              <h3 style="margin-top: 0;">💬 Mensaje:</h3>
+              <p style="white-space: pre-wrap;">${message}</p>
+            </div>
+            <hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;">
+            <p style="color: #666; font-size: 12px;">
+              Este mensaje fue enviado desde el chatbot BOBINA en 
+              <a href="https://calculadora3d.luprintech.com" style="color: #8b5cf6;">FilamentOS</a>
+            </p>
+          </div>
+        `,
+      });
+
+      console.log(`✅ Email enviado a ${BUG_REPORT_EMAIL} desde ${email}`);
+    } else {
+      console.log('\n=== NUEVO MENSAJE DE CONTACTO (SMTP no configurado) ===');
+      console.log('De:', name);
+      console.log('Email:', email);
+      console.log('Mensaje:', message);
+      console.log('Fecha:', new Date().toISOString());
+      console.log('================================\n');
+    }
+
+    res.json({ success: true, message: 'Mensaje recibido correctamente' });
+  } catch (error) {
+    console.error('[CONTACT] Error procesando mensaje:', error);
+    res.status(500).json({ error: 'Error al procesar el mensaje' });
+  }
+});
+
 // ── Stats ─────────────────────────────────────────────────────────────────────
 
 interface StatsQuery {
@@ -1558,8 +1731,8 @@ app.get('/api/stats', requireAuth, (req, res) => {
   const strftimeFormat = granularity === 'day'
     ? '%Y-%m-%d'
     : granularity === 'week'
-    ? '%Y-W%W'
-    : '%Y-%m';
+      ? '%Y-W%W'
+      : '%Y-%m';
 
   // Time series query
   const timeSeries = db.prepare(`
@@ -1710,12 +1883,12 @@ app.post('/api/analyze-3mf', upload.single('file'), async (req, res) => {
 
               // ── Priority 1: direct XML attributes (Bambu/OrcaSlicer format)
               // <filament type="PLA" color="FFFFFF" used_g="5.67" tray_color="FFFFFFFF" .../>
-              const attrColor     = String(fil['@_color']      ?? '').replace(/^#/, '');
+              const attrColor = String(fil['@_color'] ?? '').replace(/^#/, '');
               const attrTrayColor = String(fil['@_tray_color'] ?? '').replace(/^#/, '');
-              const attrType      = String(fil['@_type']       ?? '');
-              if (attrColor)     filamentColor = attrColor;
+              const attrType = String(fil['@_type'] ?? '');
+              if (attrColor) filamentColor = attrColor;
               else if (attrTrayColor) filamentColor = attrTrayColor;
-              if (attrType)      filamentType  = attrType;
+              if (attrType) filamentType = attrType;
 
               // ── Priority 2: nested <metadata key="..."> elements (other slicers)
               if (!filamentColor || !filamentType) {
@@ -1729,7 +1902,7 @@ app.post('/api/analyze-3mf', upload.single('file'), async (req, res) => {
                   if (mr['@_key']) filMeta[mr['@_key']] = String(mr['@_value'] ?? '');
                 }
                 if (!filamentColor) filamentColor = filMeta['color'] || filMeta['filament_colour'] || '';
-                if (!filamentType)  filamentType  = filMeta['type']  || filMeta['filament_type']  || '';
+                if (!filamentType) filamentType = filMeta['type'] || filMeta['filament_type'] || '';
               }
             }
 
@@ -1740,17 +1913,17 @@ app.post('/api/analyze-3mf', upload.single('file'), async (req, res) => {
               const rawColors =
                 metaMap['filament_colors'] ||
                 metaMap['filament_colour'] ||
-                metaMap['filament_color']  ||
+                metaMap['filament_color'] ||
                 metaMap['extruder_colour'] ||
                 '';
               filamentColor = rawColors.split(/[;,]/)[0].replace(/^#/, '').trim();
             }
             if (!filamentType) {
               const rawType =
-                metaMap['filament_type']     ||
+                metaMap['filament_type'] ||
                 metaMap['filament_material'] ||
-                metaMap['type']              ||
-                metaMap['material']          ||
+                metaMap['type'] ||
+                metaMap['material'] ||
                 '';
               filamentType = rawType.split(/[;,]/)[0].trim();
             }

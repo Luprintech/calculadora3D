@@ -20,7 +20,7 @@ import {
   FileDown, 
   X,
   Loader2,
-  Sparkles
+  FileText
 } from 'lucide-react';
 
 interface TrackerPdfCustomizerProps {
@@ -197,7 +197,7 @@ export function TrackerPdfCustomizer({ open, onOpenChange, trackerData }: Tracke
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-primary/10 rounded-lg">
-                <Sparkles className="h-5 w-5 text-primary" />
+                <FileText className="h-5 w-5 text-primary" />
               </div>
               <div>
                 <DialogTitle className="text-xl font-bold">Customizar PDF del Tracker</DialogTitle>

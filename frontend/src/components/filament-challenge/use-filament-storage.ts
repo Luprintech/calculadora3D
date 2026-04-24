@@ -169,12 +169,12 @@ export function useFilamentStorage({ authLoading, userId }: FilamentStorageOptio
     const { parseTimeBlock, parseGramBlock } = await import('./filament-storage');
     const time  = parseTimeBlock(input.timeText);
     const grams = parseGramBlock(input.gramText);
-      const piece: FilamentPiece = {
-        id,
-        projectId:  activeId,
-        orderIndex: pieces.length,
-        label:      input.label,
-        name:       input.name,
+    const piece: FilamentPiece = {
+      id,
+      projectId:  activeId,
+      orderIndex: pieces.length,
+      label:      input.label,
+      name:       input.name,
       timeText:   input.timeText,
       gramText:   input.gramText,
       totalSecs:  time.totalSecs,
@@ -183,6 +183,17 @@ export function useFilamentStorage({ authLoading, userId }: FilamentStorageOptio
       timeLines:  time.validLines,
       gramLines:  grams.validLines,
       imageUrl:   input.imageUrl ?? null,
+      // Filaments: populate from input if available (local-only, ids assigned by server on refresh)
+      filaments:  (input.filaments ?? []).map((f, idx) => ({
+        id: `optimistic-${idx}`,
+        pieceId: id,
+        spoolId: f.spoolId ?? null,
+        colorHex: f.colorHex,
+        colorName: f.colorName,
+        brand: f.brand,
+        material: f.material,
+        grams: f.grams,
+      })),
     };
     setPieces((prev) => [...prev, piece]);
     setProjects((prev) => prev.map((project) =>
@@ -207,9 +218,33 @@ export function useFilamentStorage({ authLoading, userId }: FilamentStorageOptio
     const grams = parseGramBlock(input.gramText);
     const currentPiece = pieces.find((p) => p.id === id);
     setPieces((prev) =>
-      prev.map((p) =>
+      prev.map((p): FilamentPiece =>
         p.id === id
-          ? { ...p, ...input, totalSecs: time.totalSecs, totalGrams: grams.totalGrams, totalCost, timeLines: time.validLines, gramLines: grams.validLines, imageUrl: input.imageUrl ?? null }
+          ? {
+              ...p,
+              label: input.label,
+              name: input.name,
+              timeText: input.timeText,
+              gramText: input.gramText,
+              spoolId: input.spoolId ?? null,
+              totalSecs: time.totalSecs,
+              totalGrams: grams.totalGrams,
+              totalCost,
+              timeLines: time.validLines,
+              gramLines: grams.validLines,
+              imageUrl: input.imageUrl ?? null,
+              // Map PieceFilamentInput[] → PieceFilament[] optimistically (ids won't match server, refresh reconciles)
+              filaments: (input.filaments ?? []).map((f, idx) => ({
+                id: `optimistic-upd-${idx}`,
+                pieceId: id,
+                spoolId: f.spoolId ?? null,
+                colorHex: f.colorHex,
+                colorName: f.colorName,
+                brand: f.brand,
+                material: f.material,
+                grams: f.grams,
+              })),
+            }
           : p,
       ),
     );

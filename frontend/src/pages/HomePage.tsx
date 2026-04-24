@@ -29,14 +29,14 @@ function ThemeToggle() {
 
 // ── Feature card ──────────────────────────────────────────────────────────────
 interface FeatureCardProps {
-  icon: string;
+  icon: React.ReactNode;
   title: string;
   description: string;
 }
 function FeatureCard({ icon, title, description }: FeatureCardProps) {
   return (
-    <div className="flex flex-col gap-3 rounded-2xl border border-border/60 bg-card/80 p-6 backdrop-blur-sm transition-shadow hover:shadow-md">
-      <span className="text-3xl" aria-hidden="true">{icon}</span>
+    <div className="flex flex-col items-center text-center gap-3 rounded-2xl border border-border/60 bg-card/80 p-6 backdrop-blur-sm transition-shadow hover:shadow-md">
+      <div className="text-primary mb-1">{icon}</div>
       <h3 className="text-base font-bold text-foreground">{title}</h3>
       <p className="text-sm leading-relaxed text-muted-foreground">{description}</p>
     </div>
@@ -45,39 +45,51 @@ function FeatureCard({ icon, title, description }: FeatureCardProps) {
 
 // ── Main landing page ─────────────────────────────────────────────────────────
 export function HomePage() {
-  const { loginWithGoogle, enterDemoMode } = useAuth();
+  const { loginWithGoogle, startGuest } = useAuth();
   const { resolvedTheme } = useTheme();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const currentYear = new Date().getFullYear();
 
   const logoSrc = resolvedTheme === 'dark' ? '/filamentos_negro.png' : '/filamentos_blanco.png';
+  
+  // Infografía según idioma y tema
+  const getInfographicSrc = () => {
+    const isSpanish = i18n.language === 'es';
+    const isDark = resolvedTheme === 'dark';
+    
+    if (isSpanish) {
+      return isDark ? '/infografia-oscura.png' : '/infografia-clara.png';
+    } else {
+      return isDark ? '/infografia-oscura-ingles.png' : '/infografia-clara-ingles.png';
+    }
+  };
 
-  function handleTryDemo() {
-    enterDemoMode();
+  async function handleStartGuest() {
+    await startGuest();
     navigate('/calculadora');
   }
 
   const features: FeatureCardProps[] = [
     {
-      icon: '🧮',
-      title: 'Calculadora de costes',
-      description: 'Filamento, electricidad, mano de obra y amortización. Presupuestos en PDF listos para enviar.',
+      icon: <Calculator className="h-10 w-10" />,
+      title: t('home_feature_calculator_title'),
+      description: t('home_feature_calculator_desc'),
     },
     {
-      icon: '🧵',
-      title: 'Inventario de bobinas',
-      description: 'Escanea etiquetas, descuenta automático tras cada impresión, alertas de stock bajo.',
+      icon: <Package className="h-10 w-10" />,
+      title: t('home_feature_inventory_title'),
+      description: t('home_feature_inventory_desc'),
     },
     {
-      icon: '📊',
-      title: 'Tracker de proyectos',
-      description: 'Series de producción, retos de 30 días o encargos. Con progreso en tiempo real.',
+      icon: <BarChart3 className="h-10 w-10" />,
+      title: t('home_feature_tracker_title'),
+      description: t('home_feature_tracker_desc'),
     },
     {
-      icon: '📈',
-      title: 'Estadísticas',
-      description: 'Filamento gastado, inversión total y proyectos más rentables. Exporta a CSV.',
+      icon: <LineChart className="h-10 w-10" />,
+      title: t('home_feature_stats_title'),
+      description: t('home_feature_stats_desc'),
     },
   ];
 
@@ -104,12 +116,12 @@ export function HomePage() {
             </div>
 
             {/* Controls */}
-            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2">
               <ThemeToggle />
               <LanguageSelector />
               <CurrencySelector />
               <Button variant="outline" size="sm" className="rounded-full font-bold" onClick={loginWithGoogle}>
-                Iniciar sesión
+                {t('sign_in')}
               </Button>
             </div>
           </div>
@@ -118,7 +130,7 @@ export function HomePage() {
         <main className="flex-1">
 
           {/* ── Hero ──────────────────────────────────────────────────────────── */}
-          <section className="relative overflow-hidden px-4 py-20 sm:px-6 sm:py-28 md:py-36">
+          <section className="relative overflow-hidden px-4 py-12 sm:px-6 sm:py-16 md:py-20">
             {/* Gradient orb background */}
             <div
               aria-hidden
@@ -131,7 +143,7 @@ export function HomePage() {
             <div className="relative mx-auto max-w-3xl text-center">
               {/* Badge */}
               <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-border/60 bg-card/70 px-4 py-1.5 text-xs font-bold text-muted-foreground backdrop-blur-sm">
-                🧵 Gratis · Open Source · Hecho en España
+                {t('home_badge')}
               </div>
 
               {/* H1 */}
@@ -144,13 +156,12 @@ export function HomePage() {
                   backgroundClip: 'text',
                 }}
               >
-                El sistema operativo<br />de tus impresiones 3D
+                {t('home_hero_title')}
               </h1>
 
               {/* Subtítulo */}
               <p className="mx-auto mb-10 max-w-xl text-base leading-relaxed text-muted-foreground sm:text-lg">
-                Calcula el coste real de cada impresión, gestiona tu inventario de bobinas
-                y haz seguimiento de tus proyectos. Todo en un solo lugar.
+                {t('home_hero_subtitle')}
               </p>
 
               {/* CTAs */}
@@ -160,28 +171,41 @@ export function HomePage() {
                   className="w-full rounded-full px-8 font-extrabold sm:w-auto"
                   onClick={loginWithGoogle}
                 >
-                  Empezar gratis con Google
+                  {t('sign_in')}
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
                 <Button
                   size="lg"
                   variant="outline"
                   className="w-full rounded-full px-8 font-bold sm:w-auto"
-                  onClick={handleTryDemo}
+                  onClick={handleStartGuest}
                 >
-                  Ver demo sin cuenta
+                  {t('home_cta_guest')}
                   <ChevronRight className="ml-1 h-4 w-4" />
                 </Button>
               </div>
 
               <p className="mt-4 text-xs text-muted-foreground/70">
-                Sin tarjeta de crédito · Sin compromisos
+                {t('home_cta_disclaimer')}
               </p>
+
+              {/* Infografía */}
+              <div className="mt-12 mx-auto w-full max-w-4xl group cursor-pointer">
+                <div className="relative rounded-xl overflow-hidden shadow-2xl border border-border/50 bg-card/50 transition-all duration-500 hover:shadow-[0_20px_60px_-15px_rgba(0,0,0,0.3)] hover:scale-[1.02] hover:border-primary/30">
+                  <div className="absolute inset-0 bg-gradient-to-tr from-primary/10 via-transparent to-primary/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"></div>
+                  <img
+                    src={getInfographicSrc()}
+                    alt="Infografía del sistema operativo FilamentOS"
+                    className="w-full h-auto object-cover transition-transform duration-500 group-hover:scale-[1.01]"
+                  />
+                  <div className="absolute inset-0 ring-2 ring-primary/0 group-hover:ring-primary/20 rounded-xl transition-all duration-500"></div>
+                </div>
+              </div>
             </div>
           </section>
 
           {/* ── Features ──────────────────────────────────────────────────────── */}
-          <section className="px-4 py-16 sm:px-6">
+          <section className="px-4 py-8 sm:px-6">
             <div className="mx-auto max-w-6xl">
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 {features.map((f) => (
@@ -192,7 +216,7 @@ export function HomePage() {
           </section>
 
           {/* ── Segunda CTA ────────────────────────────────────────────────────── */}
-          <section className="px-4 py-20 sm:px-6">
+          <section className="px-4 py-8 sm:px-6">
             <div className="mx-auto max-w-2xl">
               <div
                 className="rounded-3xl p-10 text-center"
@@ -202,10 +226,10 @@ export function HomePage() {
                 }}
               >
                 <h2 className="mb-3 text-2xl font-black text-foreground sm:text-3xl">
-                  Empieza a controlar tus impresiones hoy
+                  {t('home_cta2_title')}
                 </h2>
                 <p className="mb-8 text-muted-foreground">
-                  Gratis, sin instalación, desde el navegador.
+                  {t('home_cta2_subtitle')}
                 </p>
 
                 <div className="flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
@@ -214,15 +238,15 @@ export function HomePage() {
                     className="w-full rounded-full px-8 font-extrabold sm:w-auto"
                     onClick={loginWithGoogle}
                   >
-                    Crear cuenta gratis →
+                    {t('sign_in')} →
                   </Button>
                 </div>
 
                 <button
                   className="mt-4 text-sm text-muted-foreground underline underline-offset-2 hover:text-foreground"
-                  onClick={handleTryDemo}
+                  onClick={handleStartGuest}
                 >
-                  O prueba la demo sin cuenta
+                  {t('home_cta2_guest')}
                 </button>
               </div>
             </div>

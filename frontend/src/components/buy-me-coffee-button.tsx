@@ -9,7 +9,7 @@ const HEIGHTS: Record<NonNullable<BuyMeCoffeeButtonProps['size']>, number> = {
 };
 
 const IMG_URL =
-  'https://img.buymeacoffee.com/button-api/?text=Alimenta%20filamentOS&emoji=🍔&slug=luprintech&button_colour=e694df&font_colour=000000&font_family=Cookie&outline_colour=000000&coffee_colour=FFDD00';
+  'https://img.buymeacoffee.com/button-api/?text=Alimenta filamentOS&emoji=🧵 &slug=luprintech&button_colour=fd99ff&font_colour=000000&font_family=Poppins&outline_colour=000000&coffee_colour=FFDD00';
 
 export function BuyMeCoffeeButton({ size = 'md' }: BuyMeCoffeeButtonProps) {
   const height = HEIGHTS[size];

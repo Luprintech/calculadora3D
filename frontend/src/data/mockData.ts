@@ -1,10 +1,10 @@
 // ── FilamentOS Mock Data ───────────────────────────────────────────────────────
-// Única fuente de verdad para todos los datos de ejemplo del modo demo.
+// Única fuente de verdad para todos los datos de ejemplo del modo invitado.
 // NO duplicar estas estructuras en otros componentes.
 
 import type { Spool } from '@/features/inventory/types';
 import type { StatsResponse } from '@/features/stats/types';
-import type { FilamentProject } from '@/components/filament-challenge/filament-types';
+import type { FilamentProject, FilamentPiece } from '@/components/filament-challenge/filament-types';
 
 // ── TRACKER: Proyectos de series ───────────────────────────────────────────────
 
@@ -24,7 +24,7 @@ export interface MockTrackerProject {
 
 export const mockTrackerProjects: MockTrackerProject[] = [
   {
-    id: 'demo-1',
+    id: 'guest-sample-1',
     title: '30 días de figuras frikis 🎮',
     description: 'Serie de 30 figuras impresas en PLA durante abril 2026',
     coverImage: null,
@@ -37,7 +37,7 @@ export const mockTrackerProjects: MockTrackerProject[] = [
     pricePerKg: 22,
   },
   {
-    id: 'demo-2',
+    id: 'guest-sample-2',
     title: 'Llaveros PLA Variados',
     description: '',
     coverImage: null,
@@ -50,7 +50,7 @@ export const mockTrackerProjects: MockTrackerProject[] = [
     pricePerKg: 22,
   },
   {
-    id: 'demo-3',
+    id: 'guest-sample-3',
     title: 'Miniaturas Dragones D&D',
     description: '',
     coverImage: null,
@@ -63,7 +63,7 @@ export const mockTrackerProjects: MockTrackerProject[] = [
     pricePerKg: 22,
   },
   {
-    id: 'demo-4',
+    id: 'guest-sample-4',
     title: 'Cubos Anti-Estrés',
     description: '',
     coverImage: null,
@@ -76,7 +76,7 @@ export const mockTrackerProjects: MockTrackerProject[] = [
     pricePerKg: 22,
   },
   {
-    id: 'demo-5',
+    id: 'guest-sample-5',
     title: 'Organizadores Escritorio',
     description: '',
     coverImage: null,
@@ -104,8 +104,63 @@ export function toFilamentProject(p: MockTrackerProject): FilamentProject {
     totalCost: p.totalCost,
     currency: p.currency,
     pricePerKg: p.pricePerKg,
+    createdAt: '2026-04-01T10:00:00Z',
+    updatedAt: '2026-04-23T10:00:00Z',
   };
 }
+
+// ── TRACKER: Piezas de ejemplo ─────────────────────────────────────────────────
+
+export const mockTrackerPieces: FilamentPiece[] = [
+  {
+    id: 'piece-1',
+    projectId: 'guest-sample-1',
+    orderIndex: 0,
+    label: 'Día 1',
+    name: 'Pikachu miniatura',
+    timeText: '2h 15m',
+    gramText: '5.2',
+    totalSecs: 2 * 3600 + 15 * 60,
+    totalGrams: 5.2,
+    totalCost: 0.11,
+    timeLines: 1,
+    gramLines: 1,
+    imageUrl: null,
+    filaments: [],
+  },
+  {
+    id: 'piece-2',
+    projectId: 'guest-sample-1',
+    orderIndex: 1,
+    label: 'Día 2',
+    name: 'Baby Yoda',
+    timeText: '3h 45m',
+    gramText: '8.5',
+    totalSecs: 3 * 3600 + 45 * 60,
+    totalGrams: 8.5,
+    totalCost: 0.19,
+    timeLines: 1,
+    gramLines: 1,
+    imageUrl: null,
+    filaments: [],
+  },
+  {
+    id: 'piece-3',
+    projectId: 'guest-sample-1',
+    orderIndex: 2,
+    label: 'Día 3',
+    name: 'Link de Zelda',
+    timeText: '4h 20m',
+    gramText: '12.3',
+    totalSecs: 4 * 3600 + 20 * 60,
+    totalGrams: 12.3,
+    totalCost: 0.27,
+    timeLines: 1,
+    gramLines: 1,
+    imageUrl: null,
+    filaments: [],
+  },
+];
 
 // ── ESTADÍSTICAS ──────────────────────────────────────────────────────────────
 
@@ -127,11 +182,11 @@ export const mockStatsResponse: StatsResponse = {
     { period: '2026-04', pieces: 10, grams: 370, cost: 16.89, secs: 25.68 * 3600 },
   ],
   byProject: [
-    { projectId: 'demo-4', title: 'Cubos Anti-Estrés', pieces: 12, grams: 1200, cost: 27.18, secs: 57600 },
-    { projectId: 'demo-5', title: 'Organizadores Escritorio', pieces: 12, grams: 740, cost: 16.39, secs: 28800 },
-    { projectId: 'demo-3', title: 'Miniaturas D&D', pieces: 12, grams: 340, cost: 7.25, secs: 43200 },
-    { projectId: 'demo-r', title: 'Repuestos Impresora', pieces: 12, grams: 270, cost: 5.60, secs: 18000 },
-    { projectId: 'demo-2', title: 'Llaveros PLA', pieces: 12, grams: 60, cost: 2.49, secs: 14400 },
+    { projectId: 'guest-sample-4', title: 'Cubos Anti-Estrés', pieces: 12, grams: 1200, cost: 27.18, secs: 57600 },
+    { projectId: 'guest-sample-5', title: 'Organizadores Escritorio', pieces: 12, grams: 740, cost: 16.39, secs: 28800 },
+    { projectId: 'guest-sample-3', title: 'Miniaturas D&D', pieces: 12, grams: 340, cost: 7.25, secs: 43200 },
+    { projectId: 'guest-sample-r', title: 'Repuestos Impresora', pieces: 12, grams: 270, cost: 5.60, secs: 18000 },
+    { projectId: 'guest-sample-2', title: 'Llaveros PLA', pieces: 12, grams: 60, cost: 2.49, secs: 14400 },
   ],
 };
 
@@ -139,7 +194,7 @@ export const mockStatsResponse: StatsResponse = {
 
 export const mockSpools: Spool[] = [
   {
-    id: 'demo-b1',
+    id: 'guest-spool-1',
     brand: 'Bambu Lab',
     material: 'PLA Basic',
     color: 'Blanco',
@@ -148,13 +203,13 @@ export const mockSpools: Spool[] = [
     remainingG: 850,
     price: 24.0,
     notes: '',
-    shopUrl: null,
+    shopUrl: 'https://eu.store.bambulab.com/es/products/pla-basic-filament',
     status: 'active',
     createdAt: '2026-01-01T00:00:00Z',
     updatedAt: '2026-04-01T00:00:00Z',
   },
   {
-    id: 'demo-b2',
+    id: 'guest-spool-2',
     brand: 'Polymaker',
     material: 'PETG',
     color: 'Azul Eléctrico',
@@ -169,7 +224,7 @@ export const mockSpools: Spool[] = [
     updatedAt: '2026-04-10T00:00:00Z',
   },
   {
-    id: 'demo-b3',
+    id: 'guest-spool-3',
     brand: 'eSUN',
     material: 'PLA+',
     color: 'Rojo Carmesí',
@@ -184,7 +239,7 @@ export const mockSpools: Spool[] = [
     updatedAt: '2026-02-01T00:00:00Z',
   },
   {
-    id: 'demo-b4',
+    id: 'guest-spool-4',
     brand: 'Fillamentum',
     material: 'ABS',
     color: 'Negro Neutro',
@@ -199,7 +254,7 @@ export const mockSpools: Spool[] = [
     updatedAt: '2026-03-15T00:00:00Z',
   },
   {
-    id: 'demo-b5',
+    id: 'guest-spool-5',
     brand: 'Prusament',
     material: 'PETG',
     color: 'Galaxy Black',
@@ -214,7 +269,7 @@ export const mockSpools: Spool[] = [
     updatedAt: '2026-04-15T00:00:00Z',
   },
   {
-    id: 'demo-b6',
+    id: 'guest-spool-6',
     brand: 'Bambu Lab',
     material: 'PLA Matte',
     color: 'Rosa',
@@ -240,7 +295,7 @@ export interface MockSavedProject {
 }
 
 export const mockSavedProjects: MockSavedProject[] = [
-  { id: 'demo-p1', name: 'Sonic 3D Print', timeMinutes: 75, filamentGrams: 12 },
-  { id: 'demo-p2', name: 'Miniatura D&D Goblin', timeMinutes: 75, filamentGrams: 12 },
-  { id: 'demo-p3', name: 'Clip organizador cables', timeMinutes: 25, filamentGrams: 8 },
+  { id: 'guest-project-1', name: 'Sonic 3D Print', timeMinutes: 75, filamentGrams: 12 },
+  { id: 'guest-project-2', name: 'Miniatura D&D Goblin', timeMinutes: 75, filamentGrams: 12 },
+  { id: 'guest-project-3', name: 'Clip organizador cables', timeMinutes: 25, filamentGrams: 8 },
 ];

@@ -22,8 +22,15 @@ export function AboutModal({ open, onOpenChange }: AboutModalProps) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-sm text-center">
         <DialogHeader className="items-center gap-1">
-          <div className="mx-auto mb-1 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
-            <Info className="h-7 w-7 text-primary" />
+          <div className="mx-auto mb-3 group cursor-pointer">
+            <div className="relative h-32 w-32 rounded-full overflow-hidden bg-primary/10 border-4 border-primary/20 shadow-lg transition-all duration-300 group-hover:border-primary/60 group-hover:shadow-2xl group-hover:scale-105">
+              <img 
+                src="/lupe.png" 
+                alt="Lupe - Luprintech"
+                className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-110"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-primary/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+            </div>
           </div>
           <DialogTitle className="text-2xl font-black text-primary">FilamentOS</DialogTitle>
           <p className="text-xs font-medium text-muted-foreground">

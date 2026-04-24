@@ -10,7 +10,7 @@ import { DeductModal } from './deduct-modal';
 import { BarcodeScannerModal, type ScannerFillData } from './barcode-scanner-modal';
 import type { Spool, SpoolInput } from '../types';
 import { getTotalInventoryValue, getAverageCostPerKg, isLowStock } from '../types';
-import { DemoBanner } from '@/components/demo-banner';
+import { GuestBanner } from '@/components/guest-banner';
 import { LoginRequiredModal } from '@/components/login-required-modal';
 import { mockSpools } from '@/data/mockData';
 import { useAuth } from '@/context/auth-context';
@@ -22,7 +22,7 @@ interface InventoryDashboardProps {
 
 export function InventoryDashboard({ userId, authLoading }: InventoryDashboardProps) {
   const { t } = useTranslation();
-  const { isDemoMode } = useAuth();
+  const { isGuest } = useAuth();
   const { spools: realSpools, loading, error, customBrands, customMaterials, createSpool, updateSpool, deleteSpool, deductSpool, finishSpool } =
     useInventory({ userId, authLoading });
 
@@ -34,8 +34,8 @@ export function InventoryDashboard({ userId, authLoading }: InventoryDashboardPr
   const [scanPrefill, setScanPrefill] = useState<Partial<ScannerFillData> | null>(null);
   const [loginModalOpen, setLoginModalOpen] = useState(false);
 
-  // En modo demo, usar datos mock
-  const spools = isDemoMode ? mockSpools : realSpools;
+  // En modo invitado, usar datos de ejemplo
+  const spools = isGuest ? mockSpools : realSpools;
 
   // ── Derived metrics ──────────────────────────────────────────────────────────
   const totalValue = getTotalInventoryValue(spools);
@@ -46,7 +46,7 @@ export function InventoryDashboard({ userId, authLoading }: InventoryDashboardPr
   // ── Handlers ─────────────────────────────────────────────────────────────────
 
   function handleOpenAdd() {
-    if (isDemoMode) { setLoginModalOpen(true); return; }
+    if (isGuest) { setLoginModalOpen(true); return; }
     setEditingSpool(null);
     setScanPrefill(null);
     setFormOpen(true);
@@ -60,7 +60,7 @@ export function InventoryDashboard({ userId, authLoading }: InventoryDashboardPr
   }
 
   function handleOpenEdit(spool: Spool) {
-    if (isDemoMode) { setLoginModalOpen(true); return; }
+    if (isGuest) { setLoginModalOpen(true); return; }
     setEditingSpool(spool);
     setFormOpen(true);
   }
@@ -74,7 +74,7 @@ export function InventoryDashboard({ userId, authLoading }: InventoryDashboardPr
   }
 
   async function handleDelete(id: string) {
-    if (isDemoMode) { setLoginModalOpen(true); return; }
+    if (isGuest) { setLoginModalOpen(true); return; }
     if (deleteConfirm === id) {
       await deleteSpool(id);
       setDeleteConfirm(null);
@@ -84,18 +84,18 @@ export function InventoryDashboard({ userId, authLoading }: InventoryDashboardPr
   }
 
   async function handleDeduct(id: string, grams: number) {
-    if (isDemoMode) { setLoginModalOpen(true); return; }
+    if (isGuest) { setLoginModalOpen(true); return; }
     await deductSpool(id, grams);
   }
 
   async function handleFinish(id: string) {
-    if (isDemoMode) { setLoginModalOpen(true); return; }
+    if (isGuest) { setLoginModalOpen(true); return; }
     await finishSpool(id);
   }
 
   // ── Render ────────────────────────────────────────────────────────────────────
 
-  if (!userId && !authLoading && !isDemoMode) {
+  if (!userId && !authLoading && !isGuest) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center text-muted-foreground">
         <Package className="mb-4 h-12 w-12 opacity-30" />
@@ -106,9 +106,9 @@ export function InventoryDashboard({ userId, authLoading }: InventoryDashboardPr
 
   return (
     <section className="space-y-6">
-      {/* DemoBanner */}
-      {isDemoMode && (
-        <DemoBanner message="👀 Inventario de ejemplo. Inicia sesión para gestionar tus bobinas reales." />
+      {/* GuestBanner */}
+      {isGuest && (
+        <GuestBanner message=" Inventario de ejemplo. Inicia sesión para gestionar tus bobinas reales." />
       )}
 
       {/* Header */}
@@ -120,17 +120,17 @@ export function InventoryDashboard({ userId, authLoading }: InventoryDashboardPr
         <div className="flex gap-2">
           <Button
             variant="outline"
-            onClick={() => isDemoMode ? setLoginModalOpen(true) : setScannerOpen(true)}
-            className={`rounded-full font-bold ${isDemoMode ? 'cursor-not-allowed opacity-50' : ''}`}
-            title={isDemoMode ? 'Inicia sesión para gestionar tu inventario' : undefined}
+            onClick={() => isGuest ? setLoginModalOpen(true) : setScannerOpen(true)}
+            className={`rounded-full font-bold ${isGuest ? 'cursor-not-allowed opacity-50' : ''}`}
+            title={isGuest ? 'Inicia sesión para gestionar tu inventario' : undefined}
           >
             <ScanLine className="mr-1.5 h-4 w-4" />
             <span className="hidden sm:inline">{t('scan_btn')}</span>
           </Button>
           <Button
             onClick={handleOpenAdd}
-            className={`rounded-full font-bold ${isDemoMode ? 'cursor-not-allowed opacity-50' : ''}`}
-            title={isDemoMode ? 'Inicia sesión para gestionar tu inventario' : undefined}
+            className={`rounded-full font-bold ${isGuest ? 'cursor-not-allowed opacity-50' : ''}`}
+            title={isGuest ? 'Inicia sesión para gestionar tu inventario' : undefined}
           >
             <Plus className="mr-1.5 h-4 w-4" />
             {t('inventory.addSpool')}
@@ -159,14 +159,14 @@ export function InventoryDashboard({ userId, authLoading }: InventoryDashboardPr
       )}
 
       {/* Error (solo modo real) */}
-      {!isDemoMode && error && (
+      {!isGuest && error && (
         <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
           {error.message}
         </div>
       )}
 
       {/* Loading skeletons (solo modo real) */}
-      {!isDemoMode && loading && (
+      {!isGuest && loading && (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {[1, 2, 3].map((i) => (
             <Skeleton key={i} className="h-40 rounded-2xl" />
@@ -175,7 +175,7 @@ export function InventoryDashboard({ userId, authLoading }: InventoryDashboardPr
       )}
 
       {/* Empty state (solo modo real) */}
-      {!isDemoMode && !loading && spools.length === 0 && (
+      {!isGuest && !loading && spools.length === 0 && (
         <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/60 py-16 text-center">
           <Package className="mb-3 h-10 w-10 text-muted-foreground/40" />
           <p className="font-semibold text-muted-foreground">{t('inventory.emptyTitle')}</p>
@@ -188,11 +188,11 @@ export function InventoryDashboard({ userId, authLoading }: InventoryDashboardPr
       )}
 
       {/* Spool grid */}
-      {(isDemoMode || (!loading && spools.length > 0)) && (
+      {(isGuest || (!loading && spools.length > 0)) && (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {spools.map((spool) => (
             <div key={spool.id}>
-              {!isDemoMode && deleteConfirm === spool.id && (
+              {!isGuest && deleteConfirm === spool.id && (
                 <div className="mb-2 rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
                   <p className="font-semibold">{t('inventory.deleteConfirm', { name: `${spool.brand} ${spool.color}` })}</p>
                   <div className="mt-1.5 flex gap-2">
@@ -211,8 +211,8 @@ export function InventoryDashboard({ userId, authLoading }: InventoryDashboardPr
                 onDelete={handleDelete}
                 onDeduct={setDeductTarget}
                 onFinish={handleFinish}
-                demoMode={isDemoMode}
-                onDemoAction={() => setLoginModalOpen(true)}
+                guestMode={isGuest}
+                onGuestAction={() => setLoginModalOpen(true)}
               />
             </div>
           ))}
@@ -220,7 +220,7 @@ export function InventoryDashboard({ userId, authLoading }: InventoryDashboardPr
       )}
 
       {/* Add/Edit Form modal (solo modo real) */}
-      {!isDemoMode && (
+      {!isGuest && (
         <SpoolForm
           open={formOpen}
           onClose={() => { setFormOpen(false); setScanPrefill(null); }}
@@ -233,7 +233,7 @@ export function InventoryDashboard({ userId, authLoading }: InventoryDashboardPr
       )}
 
       {/* Deduct modal (solo modo real) */}
-      {!isDemoMode && (
+      {!isGuest && (
         <DeductModal
           spool={deductTarget}
           onClose={() => setDeductTarget(null)}
@@ -242,7 +242,7 @@ export function InventoryDashboard({ userId, authLoading }: InventoryDashboardPr
       )}
 
       {/* Barcode scanner modal (solo modo real) */}
-      {!isDemoMode && (
+      {!isGuest && (
         <BarcodeScannerModal
           open={scannerOpen}
           onClose={() => setScannerOpen(false)}

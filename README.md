@@ -139,6 +139,20 @@ node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
 npm run dev
 ```
 
+### Modo invitado
+
+FilamentOS permite entrar con **Continuar sin cuenta** para probar la aplicación sin registro.
+
+- El backend crea una sesión temporal en la tabla `guest_sessions` con UUID, `created_at`, `expires_at` y `last_activity`.
+- Las sesiones invitadas expiran a las 24 horas y se limpian al arrancar el servidor y después una vez al día.
+- El invitado puede usar la calculadora, analizar archivos compatibles y generar/vista previa de PDF.
+- El inventario se muestra con datos de ejemplo en solo lectura.
+- El invitado no puede guardar proyectos permanentemente, usar tracker de series ni estadísticas.
+- Si intenta guardar, se muestra un modal para crear una cuenta gratuita con Google.
+- Al registrarse con Google, el proyecto actual guardado temporalmente en el navegador se migra automáticamente a su cuenta.
+
+En producción, asegúrate de configurar un `SESSION_SECRET` fuerte; el servidor no arrancará con `NODE_ENV=production` si falta o es demasiado corto.
+
 Lanza en paralelo:
 - **Frontend** (Vite): `http://localhost:9002`
 - **Backend** (Express): `http://localhost:3001`

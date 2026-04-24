@@ -22,9 +22,9 @@ import type { EditingState, FilamentProject, TrackerView } from './filament-type
 import type { PieceInput, ProjectInput } from './use-filament-storage';
 import { useTranslation } from 'react-i18next';
 import { useInventory } from '@/features/inventory/api/use-inventory';
-import { DemoBanner } from '@/components/demo-banner';
+import { GuestBanner } from '@/components/guest-banner';
 import { LoginRequiredModal } from '@/components/login-required-modal';
-import { mockTrackerProjects, toFilamentProject } from '@/data/mockData';
+import { mockTrackerProjects, mockTrackerPieces, toFilamentProject } from '@/data/mockData';
 
 // ── Login gate ────────────────────────────────────────────────────────────────
 
@@ -52,24 +52,39 @@ function LoginPrompt() {
 // ── Main tracker ──────────────────────────────────────────────────────────────
 
 export function FilamentTracker() {
-  const { user, loading: authLoading, isDemoMode } = useAuth();
+  const { user, loading: authLoading, isGuest } = useAuth();
   const { t } = useTranslation();
 
-  // Always call hooks (rules of hooks) — pass null userId in demo mode so they're no-ops
+  // Always call hooks (rules of hooks) — pass null userId in guest mode so they're no-ops
   const {
     loading, error,
     projects: realProjects,
-    activeProject, createProject, updateProject, deleteProject, selectProject,
-    pieces, addPiece, updatePiece, deletePiece, reorderPieces,
-  } = useFilamentStorage({ authLoading, userId: isDemoMode ? null : (user?.id ?? null) });
+    activeProject: realActiveProject, createProject, updateProject, deleteProject, selectProject: realSelectProject,
+    pieces: realPieces, addPiece, updatePiece, deletePiece, reorderPieces,
+  } = useFilamentStorage({ authLoading, userId: isGuest ? null : (user?.id ?? null) });
 
-  const { spools: allSpools } = useInventory({ authLoading, userId: isDemoMode ? null : (user?.id ?? null) });
+  const { spools: allSpools } = useInventory({ authLoading, userId: isGuest ? null : (user?.id ?? null) });
   const activeSpools = allSpools.filter((s) => s.status === 'active');
 
-  // In demo mode, use mock projects; real mode uses API data
-  const projects: FilamentProject[] = isDemoMode
+  // Guest mode: local state for selected sample project
+  const [guestActiveProjectId, setGuestActiveProjectId] = useState<string | null>(null);
+
+  // In guest mode, use sample projects and pieces; real mode uses API data
+  const projects: FilamentProject[] = isGuest
     ? mockTrackerProjects.map(toFilamentProject)
     : realProjects;
+
+  const activeProject = isGuest
+    ? projects.find(p => p.id === guestActiveProjectId) ?? null
+    : realActiveProject;
+
+  const selectProject = isGuest
+    ? setGuestActiveProjectId
+    : realSelectProject;
+
+  const pieces = isGuest && activeProject
+    ? mockTrackerPieces.filter(p => p.projectId === activeProject.id)
+    : realPieces;
 
   const [view, setView]                 = useState<TrackerView>('manager');
   const [editingState, setEditingState] = useState<EditingState>({ mode: 'create' });
@@ -112,26 +127,29 @@ export function FilamentTracker() {
     );
   }
 
-  if (!user && !isDemoMode) return <LoginPrompt />;
+  if (!user && !isGuest) return <LoginPrompt />;
 
-  // ── Demo mode: read-only manager view ────────────────────────────────────────
-  if (isDemoMode) {
+  // ── Guest mode: show sample projects but allow viewing them ─────────────────
+  if (isGuest && view === 'manager') {
     return (
       <>
-        <DemoBanner message="👀 Proyectos de ejemplo. Inicia sesión para crear y gestionar tus series reales." />
+        <GuestBanner message="👀 Proyectos de ejemplo. Inicia sesión para crear y gestionar tus series reales." />
         <div className="relative overflow-hidden rounded-[32px] print:hidden">
           <TrackerGalaxyBackground />
           <div className="relative z-10 p-1">
             <ProjectManager
               projects={projects}
-              activeProjectId={projects[0]?.id ?? null}
+              activeProjectId={activeProject?.id ?? projects[0]?.id ?? null}
               onCreate={() => setLoginModalOpen(true)}
               onUpdate={() => setLoginModalOpen(true)}
               onDelete={() => setLoginModalOpen(true)}
-              onSelect={() => {}}
-              onOpenProject={() => setLoginModalOpen(true)}
-              demoMode
-              onDemoAction={() => setLoginModalOpen(true)}
+              onSelect={selectProject}
+              onOpenProject={(id) => {
+                selectProject(id);
+                setView('project');
+              }}
+              guestMode
+              onGuestAction={() => setLoginModalOpen(true)}
             />
           </div>
         </div>
@@ -139,6 +157,53 @@ export function FilamentTracker() {
           open={loginModalOpen}
           onOpenChange={setLoginModalOpen}
           message="Inicia sesión para crear y gestionar tus proyectos de seguimiento."
+        />
+      </>
+    );
+  }
+
+  // ── Guest mode: inside a sample project (read-only) ─────────────────────────
+  if (isGuest && view !== 'manager' && activeProject) {
+    return (
+      <>
+        <GuestBanner message="👀 Proyecto de ejemplo. Inicia sesión para crear tus propias series y gestionar piezas." />
+        <div className="relative w-full overflow-hidden rounded-[32px]">
+          <TrackerGalaxyBackground />
+          <div className="relative z-10 print:hidden">
+            <ChallengeHero
+              project={activeProject}
+              pieces={pieces}
+              onBack={() => setView('manager')}
+              onPrint={() => setLoginModalOpen(true)}
+              onEditProject={() => setLoginModalOpen(true)}
+              onDeleteProject={() => setLoginModalOpen(true)}
+            />
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+              {/* Form placeholder in guest mode */}
+              <div className="challenge-panel rounded-[24px] border border-white/[0.10] p-6 text-center">
+                <p className="text-muted-foreground text-sm">{t('tracker_guest_form_placeholder')}</p>
+                <Button
+                  className="challenge-btn-primary mt-4 rounded-full px-6 font-extrabold"
+                  onClick={() => setLoginModalOpen(true)}
+                >
+                  {t('tracker_login_to_add')}
+                </Button>
+              </div>
+              <ChallengePieceList
+                project={activeProject}
+                pieces={pieces}
+                editingState={editingState}
+                onEdit={() => setLoginModalOpen(true)}
+                onDelete={() => setLoginModalOpen(true)}
+                onReorder={() => {}}
+              />
+            </div>
+          </div>
+        </div>
+        <LoginRequiredModal
+          open={loginModalOpen}
+          onOpenChange={setLoginModalOpen}
+          message={t('tracker_login_to_manage')}
         />
       </>
     );

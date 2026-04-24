@@ -1,10 +1,15 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+﻿import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 
 // IMPORTANTE: El proyecto usa VITE_API_URL (no VITE_API_BASE_URL)
 // En desarrollo apunta a http://localhost:3001
 // Pero en el navegador usamos URLs relativas para que pase por el proxy de Vite
 const API_BASE = '';
+
+export interface SocialLink {
+  network: string;
+  url: string;
+}
 
 export interface PdfCustomization {
   logoPath?: string | null;
@@ -13,6 +18,12 @@ export interface PdfCustomization {
   accentColor: string;
   companyName?: string | null;
   footerText?: string | null;
+  socialLinks?: SocialLink[] | null;
+  websiteUrl?: string | null;
+  instagramUrl?: string | null;
+  tiktokUrl?: string | null;
+  facebookUrl?: string | null;
+  xUrl?: string | null;
   showMachineCosts: boolean;
   showBreakdown: boolean;
   showOtherCosts: boolean;
@@ -141,15 +152,16 @@ async function generatePdf(
   return res.blob();
 }
 
-export function usePdfCustomization() {
+export function usePdfCustomization(guestMode = false) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  // GET config
+  // GET config - skip in guest mode
   const { data: config, isLoading } = useQuery({
     queryKey: ['pdf-config'],
     queryFn: fetchPdfConfig,
     staleTime: 5 * 60 * 1000, // 5 minutos
+    enabled: !guestMode, // Don't fetch in guest mode
   });
 
   // SAVE config
@@ -238,3 +250,4 @@ export function usePdfCustomization() {
     isGeneratingPdf: generatePdfMutation.isPending,
   };
 }
+
