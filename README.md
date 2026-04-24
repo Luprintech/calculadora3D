@@ -1,6 +1,6 @@
 <div align="center">
 
-  <img src="frontend/public/Logo.svg" width="80" alt="FilamentOS Logo" />
+  <img src="frontend/public/filamentos_negro.png" width="80" alt="FilamentOS Logo" />
 
   <h1>FilamentOS</h1>
 
