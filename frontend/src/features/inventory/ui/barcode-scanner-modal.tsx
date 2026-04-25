@@ -159,7 +159,11 @@ export function BarcodeScannerModal({ open, onClose, onFill }: BarcodeScannerMod
         scannerRef.current = new Html5Qrcode(READER_ID, { verbose: false });
       }
 
+      // Mostrar el div ANTES de llamar a start() para que Html5Qrcode
+      // encuentre el elemento visible y pueda insertar el video correctamente.
+      // Sin este paso el stream arranca en un div hidden → pantalla negra.
       setCameraReady(true);
+      await new Promise((r) => setTimeout(r, 100));
 
       // Configuración de cámara trasera compatible con iOS y Android
       const cameraConfig = IS_IOS
@@ -231,11 +235,13 @@ export function BarcodeScannerModal({ open, onClose, onFill }: BarcodeScannerMod
           <DialogDescription>{t('scan_subtitle')}</DialogDescription>
         </DialogHeader>
 
-        {/* Camera viewport — always rendered so the element exists in DOM */}
+        {/* Camera viewport — visible desde que cameraReady=true para que
+            Html5Qrcode encuentre el elemento en el DOM antes de start().
+            Sin esto el video arranca en un div hidden → pantalla negra. */}
         <div
           id={READER_ID}
-          className={`w-full rounded-xl overflow-hidden bg-black/5 border border-border/50 ${
-            cameraActive ? 'min-h-[280px]' : 'hidden'
+          className={`w-full rounded-xl border border-border/50 bg-black ${
+            cameraReady || cameraActive ? 'min-h-[300px]' : 'hidden'
           }`}
         />
 

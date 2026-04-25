@@ -37,6 +37,7 @@ import { BuyMeCoffeeButton } from '@/components/buy-me-coffee-button';
 import { InventoryDashboard } from '@/features/inventory';
 import { HomePage } from '@/pages/HomePage';
 import { ChatBotBobina } from '@/components/chatbot-bobina';
+import { IosInstallBanner } from '@/components/ios-install-banner';
 
 const StatsDashboard = React.lazy(() =>
   import('@/features/stats/components/stats-dashboard').then((m) => ({ default: m.StatsDashboard }))
@@ -517,6 +518,7 @@ function AppContent() {
       </Routes>
       {!accepted && <CookieBanner onAccept={accept} />}
       <ChatBotBobina />
+      <IosInstallBanner />
     </>
   );
 }
